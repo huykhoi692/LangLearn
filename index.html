@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LangLearn - Học ngôn ngữ</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="container">
+    <h1>LangLearn</h1>
+    <p>Ứng dụng web hỗ trợ học từ vựng, làm quiz và theo dõi tiến độ.</p>
+  </header>
+
+  <main class="container grid">
+    <section class="card">
+      <h2>Thêm từ vựng</h2>
+      <form id="vocab-form">
+        <label>Từ mới
+          <input id="word" required placeholder="Ví dụ: diligent" />
+        </label>
+        <label>Nghĩa
+          <input id="meaning" required placeholder="chăm chỉ" />
+        </label>
+        <label>Ví dụ
+          <input id="example" placeholder="She is a diligent student." />
+        </label>
+        <button type="submit">Lưu từ</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Flashcards</h2>
+      <div id="flashcard" class="flashcard">
+        <p id="flash-word">Chưa có dữ liệu</p>
+        <small id="flash-meaning"></small>
+      </div>
+      <div class="row">
+        <button id="toggle-answer">Hiện nghĩa</button>
+        <button id="next-card">Thẻ tiếp theo</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Quiz nhanh</h2>
+      <p id="quiz-question">Thêm ít nhất 2 từ để bắt đầu quiz.</p>
+      <div id="quiz-options" class="options"></div>
+      <p id="quiz-result"></p>
+      <div class="row">
+        <button id="new-quiz">Câu mới</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Tiến độ</h2>
+      <p>Tổng từ đã lưu: <strong id="total-words">0</strong></p>
+      <p>Số câu đúng quiz: <strong id="correct-count">0</strong></p>
+      <p>Số câu đã làm: <strong id="attempt-count">0</strong></p>
+      <button id="reset-data" class="danger">Xóa toàn bộ dữ liệu</button>
+    </section>
+
+    <section class="card full">
+      <h2>Danh sách từ vựng</h2>
+      <ul id="vocab-list"></ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
