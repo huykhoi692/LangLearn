@@ -39,3 +39,8 @@ Nếu gặp `API lỗi 404`, thường là do model name không hợp lệ cho e
 ## 3 giai đoạn học
 - App có phase selector (GĐ1/GĐ2/GĐ3). Prompt generate dùng phase hiện tại để điều chỉnh độ khó/focus.
 - Vocab/Grammar tools render theo dữ liệu DB (vocab_items/grammar_items) của ngày hiện tại.
+
+
+## Cập nhật Reading/Listening
+- Reading có ô nhập câu trả lời cho từng câu hỏi + nút chấm nhanh theo đáp án AI sinh sẵn.
+- Listening ưu tiên mở trực tiếp `youtubeUrl` nếu model trả về; nếu không có thì fallback link search YouTube.

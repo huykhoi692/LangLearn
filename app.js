@@ -23,6 +23,9 @@ const el = {
   weeklyTime: document.getElementById('weekly-time'),
   readingBox: document.getElementById('reading-box'),
   listeningBox: document.getElementById('listening-box'),
+  readingQa: document.getElementById('reading-qa'),
+  checkReading: document.getElementById('check-reading'),
+  readingFeedback: document.getElementById('reading-feedback'),
   speakingBox: document.getElementById('speaking-box'),
   writingBox: document.getElementById('writing-box'),
   vocabBox: document.getElementById('vocab-box'),
@@ -51,7 +54,13 @@ const el = {
   syncBackfill: document.getElementById('sync-backfill'),
   syncStatus: document.getElementById('sync-status'),
   phaseSelect: document.getElementById('phase-select'),
-  phaseNote: document.getElementById('phase-note')
+  phaseNote: document.getElementById('phase-note'),
+  readingHighlight: document.getElementById('reading-highlight'),
+  readingHidePassage: document.getElementById('reading-hide-passage'),
+  readingKeywords: document.getElementById('reading-keywords'),
+  readingVocabInput: document.getElementById('reading-vocab-input'),
+  readingSaveWord: document.getElementById('reading-save-word'),
+  readingWordList: document.getElementById('reading-word-list')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -59,6 +68,7 @@ if (!state.settings) state.settings = { apiKey: '', model: 'gemini-1.5-flash' };
 if (!state.days) state.days = {};
 if (!state.days[dateKey]) state.days[dateKey] = { plan: null, tasks: [] };
 if (!state.phase) state.phase = 'phase1';
+if (!state.readingNotebook) state.readingNotebook = [];
 
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
 
@@ -153,8 +163,8 @@ KHÔNG lặp lại từ/chủ điểm sau (14 ngày gần đây):
 - Grammar points đã dùng: ${history.recentGrammarPoints.join(', ') || 'none'}
 Schema:
 {
- "reading":{"title":"","passage":"","questions":["","",""],"duration":25},
- "listening":{"title":"","youtubeQuery":"","task":"","duration":20},
+ "reading":{"title":"","passage":"","questions":["","",""],"answers":["","",""],"duration":25},
+ "listening":{"title":"","youtubeUrl":"","youtubeQuery":"","task":"","duration":20},
  "speaking":{"question":"","hints":["",""],"duration":20},
  "writing":{"question":"","hints":["",""],"duration":30},
  "vocabulary":[{"word":"","meaning":"","example":""}],
@@ -171,12 +181,19 @@ Yêu cầu:
 
 function renderPlan(plan) {
   el.readingBox.innerHTML = `<h3>${sanitize(plan.reading.title)}</h3><p>${sanitize(plan.reading.passage)}</p><ol>${plan.reading.questions.map(q => `<li>${sanitize(q)}</li>`).join('')}</ol>`;
+  const directUrl = (plan.listening.youtubeUrl || '').trim();
   const query = encodeURIComponent(plan.listening.youtubeQuery || 'english listening practice');
-  el.listeningBox.innerHTML = `<p><strong>${sanitize(plan.listening.title)}</strong></p><p>${sanitize(plan.listening.task)}</p><a target="_blank" href="https://www.youtube.com/results?search_query=${query}">Mở link YouTube gợi ý</a>`;
+  const link = directUrl || `https://www.youtube.com/results?search_query=${query}`;
+  el.listeningBox.innerHTML = `<p><strong>${sanitize(plan.listening.title)}</strong></p><p>${sanitize(plan.listening.task)}</p><a target="_blank" href="${sanitize(link)}">Mở bài nghe</a>`;
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.vocabBox.innerHTML = plan.vocabulary.map(v => `<div class="vocab-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>${sanitize(v.example)}</small></div>`).join('');
   el.grammarBox.innerHTML = plan.grammar.map(g => `<div class="vocab-item"><strong>${sanitize(g.point)}</strong><span>${sanitize(g.exercise)}</span><small>Đáp án: ${sanitize(g.answer)}</small></div>`).join('');
+
+  const readingQs = plan.reading.questions || [];
+  el.readingQa.innerHTML = readingQs.map((q, i) => `<div class="vocab-item"><strong>Câu ${i + 1}</strong><span>${sanitize(q)}</span><input class="reading-input" data-i="${i}" placeholder="Nhập câu trả lời của bạn" /></div>`).join('');
+  el.readingFeedback.textContent = '';
+
 }
 
 function renderChecklist() {
@@ -186,6 +203,104 @@ function renderChecklist() {
   el.checklist.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
     const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderStats();
   }));
+}
+
+
+async function renderStatsCloudFirst() {
+  const user = await currentUser();
+  if (!user) { renderStats(); return; }
+
+  const { data: plans, error: pErr } = await supa
+    .from('daily_plans')
+    .select('id,study_date')
+    .eq('user_id', user.id)
+    .order('study_date', { ascending: false })
+    .limit(60);
+  if (pErr || !plans?.length) { renderStats(); return; }
+
+  const ids = plans.map(p => p.id);
+  const { data: tasks, error: tErr } = await supa
+    .from('daily_tasks')
+    .select('daily_plan_id,is_done,duration_min')
+    .in('daily_plan_id', ids);
+  if (tErr || !tasks) { renderStats(); return; }
+
+  const byPlan = new Map();
+  tasks.forEach(t => {
+    if (!byPlan.has(t.daily_plan_id)) byPlan.set(t.daily_plan_id, []);
+    byPlan.get(t.daily_plan_id).push(t);
+  });
+
+  const completed = plans.filter(p => {
+    const arr = byPlan.get(p.id) || [];
+    return arr.length && arr.every(x => x.is_done);
+  }).length;
+
+  const todayPlan = plans.find(p => p.study_date === dateKey);
+  const todayTasks = todayPlan ? (byPlan.get(todayPlan.id) || []) : [];
+  const todayPct = todayTasks.length ? Math.round((todayTasks.filter(t => t.is_done).length / todayTasks.length) * 100) : 0;
+
+  let streak = 0;
+  for (const p of plans) {
+    const arr = byPlan.get(p.id) || [];
+    if (arr.length && arr.every(x => x.is_done)) streak += 1;
+    else break;
+  }
+
+  const weekAgo = Date.now() - 7 * 86400000;
+  let mins = 0;
+  plans.forEach(p => {
+    const ts = new Date(p.study_date).getTime();
+    if (ts < weekAgo) return;
+    (byPlan.get(p.id) || []).filter(x => x.is_done).forEach(x => { mins += Number(x.duration_min || 0); });
+  });
+
+  el.completedDays.textContent = completed;
+  el.todayProgress.textContent = `${todayPct}%`;
+  el.streak.textContent = streak;
+  el.weeklyTime.textContent = `${(mins / 60).toFixed(1)}h`;
+}
+
+function extractReadingKeywords() {
+  const plan = state.days[dateKey]?.plan;
+  const qs = plan?.reading?.questions || [];
+  const words = qs.join(' ').match(/[A-Za-z]{5,}/g) || [];
+  const uniq = [...new Set(words.map(w => w.toLowerCase()))].slice(0, 12);
+  return uniq;
+}
+
+function applyReadingKeywordHighlight() {
+  const plan = state.days[dateKey]?.plan;
+  const box = el.readingBox;
+  if (!plan?.reading?.passage || !box) return;
+  const kws = extractReadingKeywords();
+  el.readingKeywords.textContent = kws.length ? `Keywords gợi ý: ${kws.join(', ')}` : 'Không tìm thấy keyword nổi bật.';
+  let html = `<h3>${sanitize(plan.reading.title)}</h3><p>${sanitize(plan.reading.passage)}</p><ol>${(plan.reading.questions||[]).map(q => `<li>${sanitize(q)}</li>`).join('')}</ol>`;
+  kws.forEach(k => {
+    const re = new RegExp(`\b(${k})\b`, 'gi');
+    html = html.replace(re, '<mark class="keyword">$1</mark>');
+  });
+  box.innerHTML = html;
+}
+
+function toggleReadingPassage() {
+  const p = el.readingBox.querySelector('p');
+  if (!p) return;
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+}
+
+function renderReadingNotebook() {
+  el.readingWordList.innerHTML = state.readingNotebook.map((w,i)=>`<li>${i+1}. ${sanitize(w)}</li>`).join('');
+}
+
+function saveReadingWord() {
+  const w = (el.readingVocabInput.value || '').trim();
+  if (!w) return;
+  state.readingNotebook.unshift(w);
+  state.readingNotebook = [...new Set(state.readingNotebook)].slice(0, 100);
+  save();
+  el.readingVocabInput.value = '';
+  renderReadingNotebook();
 }
 
 function renderStats() {
@@ -212,6 +327,24 @@ function renderStats() {
   el.todayProgress.textContent = `${pct}%`;
   el.streak.textContent = streak;
   el.weeklyTime.textContent = `${(mins / 60).toFixed(1)}h`;
+}
+
+
+function checkReadingAnswers() {
+  const plan = state.days[dateKey].plan;
+  const answers = plan?.reading?.answers || [];
+  const inputs = [...document.querySelectorAll('.reading-input')];
+  if (!answers.length || !inputs.length) { el.readingFeedback.textContent = 'Chưa có dữ liệu đáp án reading trong plan.'; return; }
+  let correct = 0;
+  const details = [];
+  inputs.forEach((inp, idx) => {
+    const user = (inp.value || '').trim().toLowerCase();
+    const ans = String(answers[idx] || '').trim().toLowerCase();
+    const ok = user && ans && user === ans;
+    if (ok) correct += 1;
+    details.push(`C${idx+1}: ${ok ? '✓' : `✗ (${answers[idx] || 'N/A'})`}`);
+  });
+  el.readingFeedback.textContent = `Reading: ${correct}/${answers.length}. ${details.join(' | ')}`;
 }
 
 async function checkAnswer(skill, question, answer, outEl) {
@@ -369,8 +502,9 @@ function init() {
   el.modelName.value = state.settings.model || 'gemini-1.5-flash';
   if (state.days[dateKey].plan) renderPlan(state.days[dateKey].plan);
   renderChecklist();
-  renderStats();
+  renderStatsCloudFirst();
   renderPhaseNote();
+  renderReadingNotebook();
   renderVocabTools();
   renderGrammarTools();
 }
@@ -518,7 +652,7 @@ el.authLogin?.addEventListener('click', async () => {
   try {
     await migrateAllLocalToSupabase();
     await loadTodayFromSupabase();
-    if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
+    if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); await renderStatsCloudFirst(); renderVocabTools(); renderGrammarTools(); }
     el.authStatus.textContent = 'Đăng nhập + migrate toàn bộ thành công ✅';
   } catch (e) {
     el.authStatus.textContent = `Đăng nhập ok nhưng migrate lỗi: ${e.message}`;
@@ -550,3 +684,10 @@ el.phaseSelect?.addEventListener('change', () => {
   save();
   renderPhaseNote();
 });
+
+
+el.readingHighlight?.addEventListener('click', applyReadingKeywordHighlight);
+el.readingHidePassage?.addEventListener('click', toggleReadingPassage);
+el.readingSaveWord?.addEventListener('click', saveReadingWord);
+
+el.checkReading?.addEventListener('click', checkReadingAnswers);

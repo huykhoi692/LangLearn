@@ -25,3 +25,6 @@ button.ghost { background:#2a3758; }
 
 .flashcard{margin-top:.7rem;background:#10192a;border:1px solid #2a3758;border-radius:10px;padding:1rem;min-height:76px;display:flex;align-items:center;justify-content:center;text-align:center;}
 .grammar-practice{display:grid;gap:.5rem;margin-top:.6rem;}
+
+mark.keyword{background:#ffd166;color:#111;padding:0 .2rem;border-radius:4px;}
+#reading-vocab-input{min-width:260px;}
