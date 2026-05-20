@@ -34,3 +34,8 @@ Nếu gặp `API lỗi 404`, thường là do model name không hợp lệ cho e
 - App tăng độ khó theo tiến độ hoàn thành task 7 ngày gần nhất (level 1-7).
 - Prompt sinh dữ liệu có blacklist từ vựng/chủ điểm ngữ pháp 14 ngày gần nhất để hạn chế trùng.
 - Khi sync Supabase, vocab/grammar được ghi thêm vào `vocab_items` và `grammar_items`.
+
+
+## 3 giai đoạn học
+- App có phase selector (GĐ1/GĐ2/GĐ3). Prompt generate dùng phase hiện tại để điều chỉnh độ khó/focus.
+- Vocab/Grammar tools render theo dữ liệu DB (vocab_items/grammar_items) của ngày hiện tại.

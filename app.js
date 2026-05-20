@@ -49,17 +49,31 @@ const el = {
   authLogout: document.getElementById('auth-logout'),
   authStatus: document.getElementById('auth-status'),
   syncBackfill: document.getElementById('sync-backfill'),
-  syncStatus: document.getElementById('sync-status')
+  syncStatus: document.getElementById('sync-status'),
+  phaseSelect: document.getElementById('phase-select'),
+  phaseNote: document.getElementById('phase-note')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
 if (!state.settings) state.settings = { apiKey: '', model: 'gemini-1.5-flash' };
 if (!state.days) state.days = {};
 if (!state.days[dateKey]) state.days[dateKey] = { plan: null, tasks: [] };
+if (!state.phase) state.phase = 'phase1';
 
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
 
 function sanitize(text = '') { return String(text).replace(/[<>]/g, ''); }
+
+const PHASE_CONFIG = {
+  phase1: { label: 'Giai đoạn 1', levelBias: 'B1', focus: 'Nền tảng từ vựng + grammar cơ bản + reading ngắn' },
+  phase2: { label: 'Giai đoạn 2', levelBias: 'B1+', focus: 'Cân bằng 4 kỹ năng + tăng độ dài bài đọc/listening' },
+  phase3: { label: 'Giai đoạn 3', levelBias: 'B2/C1', focus: 'Bài sát đề thi IELTS/TOEIC, khó hơn, có bẫy từ vựng' }
+};
+
+function renderPhaseNote() {
+  const c = PHASE_CONFIG[state.phase] || PHASE_CONFIG.phase1;
+  if (el.phaseNote) el.phaseNote.textContent = `${c.label}: ${c.focus} (${c.levelBias})`;
+}
 
 async function callGemini(prompt) {
   const apiKey = state.settings.apiKey;
@@ -129,7 +143,9 @@ function getRecentHistorySummary(limitDays = 14) {
 async function generateDailyPlan() {
   const level = getDifficultyLevel();
   const history = getRecentHistorySummary(14);
+  const phase = PHASE_CONFIG[state.phase] || PHASE_CONFIG.phase1;
   const prompt = `Tạo JSON thuần cho kế hoạch học tiếng Anh trong 1 ngày cho người Việt mục tiêu IELTS 6.5 + TOEIC 750.
+Giai đoạn hiện tại: ${phase.label}. Định hướng: ${phase.focus}. Độ khó mục tiêu: ${phase.levelBias}.
 Độ khó hiện tại: ${level}/7 (1 dễ -> 7 khó).
 Tăng độ khó theo level: level thấp dùng câu ngắn + từ B1; level cao dùng câu dài hơn + từ học thuật B2/C1.
 KHÔNG lặp lại từ/chủ điểm sau (14 ngày gần đây):
@@ -262,9 +278,9 @@ let dbLoadedVocab = [];
 let dbLoadedGrammar = [];
 
 function renderVocabTools() {
-  const vocab = dbLoadedVocab.length ? dbLoadedVocab : (state.days[dateKey].plan?.vocabulary || []);
+  const vocab = dbLoadedVocab;
   if (!vocab.length) {
-    el.vocabFlashcard.textContent = 'Hãy sinh kế hoạch trước để có từ vựng.';
+    el.vocabFlashcard.textContent = 'Chưa có vocab từ DB hôm nay. Hãy generate rồi sync lại.';
     el.vocabPractice.innerHTML = '';
     el.vocabQuizScore.textContent = '';
     return;
@@ -274,7 +290,7 @@ function renderVocabTools() {
 }
 
 function renderOneVocabQuestion() {
-  const vocab = dbLoadedVocab.length ? dbLoadedVocab : (state.days[dateKey].plan?.vocabulary || []);
+  const vocab = dbLoadedVocab;
   if (!vocab.length) return;
   const target = vocab[Math.floor(Math.random() * vocab.length)];
   const options = [target.meaning];
@@ -302,9 +318,9 @@ function renderOneVocabQuestion() {
 }
 
 function nextFlashcard() {
-  const vocab = dbLoadedVocab.length ? dbLoadedVocab : (state.days[dateKey].plan?.vocabulary || []);
+  const vocab = dbLoadedVocab;
   if (!vocab.length) {
-    el.vocabFlashcard.textContent = 'Hãy sinh kế hoạch trước để có từ vựng.';
+    el.vocabFlashcard.textContent = 'Chưa có vocab từ DB hôm nay. Hãy generate rồi sync lại.';
     return;
   }
   currentFlashIndex = (currentFlashIndex + 1) % vocab.length;
@@ -313,7 +329,7 @@ function nextFlashcard() {
 }
 
 function toggleFlashMeaning() {
-  const vocab = dbLoadedVocab.length ? dbLoadedVocab : (state.days[dateKey].plan?.vocabulary || []);
+  const vocab = dbLoadedVocab;
   if (currentFlashIndex < 0 || !vocab.length) return;
   flashShowMeaning = !flashShowMeaning;
   const w = vocab[currentFlashIndex];
@@ -321,9 +337,9 @@ function toggleFlashMeaning() {
 }
 
 function renderGrammarTools() {
-  const grammar = dbLoadedGrammar.length ? dbLoadedGrammar : (state.days[dateKey].plan?.grammar || []);
+  const grammar = dbLoadedGrammar;
   if (!grammar.length) {
-    el.grammarPractice.innerHTML = '<p class="muted">Hãy sinh kế hoạch trước để có bài grammar.</p>';
+    el.grammarPractice.innerHTML = '<p class="muted">Chưa có grammar từ DB hôm nay. Hãy generate rồi sync lại.</p>';
     return;
   }
   el.grammarPractice.innerHTML = grammar.map((g, i) => `<div class="vocab-item"><strong>${i + 1}. ${sanitize(g.point)}</strong><span>${sanitize(g.exercise)}</span><input data-i="${i}" class="grammar-input" placeholder="Nhập đáp án của bạn" /></div>`).join('');
@@ -331,7 +347,7 @@ function renderGrammarTools() {
 }
 
 function checkGrammarAnswers() {
-  const grammar = dbLoadedGrammar.length ? dbLoadedGrammar : (state.days[dateKey].plan?.grammar || []);
+  const grammar = dbLoadedGrammar;
   const inputs = [...document.querySelectorAll('.grammar-input')];
   if (!grammar.length || !inputs.length) return;
   let correct = 0;
@@ -349,10 +365,12 @@ function init() {
     el.genStatus.textContent = 'Bạn đang mở bằng file:// nên có thể gặp lỗi bảo mật khi gọi API. Hãy chạy: python3 -m http.server 8000 rồi mở http://localhost:8000';
   }
   el.apiKey.value = state.settings.apiKey || '';
+  if (el.phaseSelect) el.phaseSelect.value = state.phase;
   el.modelName.value = state.settings.model || 'gemini-1.5-flash';
   if (state.days[dateKey].plan) renderPlan(state.days[dateKey].plan);
   renderChecklist();
   renderStats();
+  renderPhaseNote();
   renderVocabTools();
   renderGrammarTools();
 }
@@ -524,4 +542,11 @@ el.syncBackfill?.addEventListener('click', async () => {
   } catch (e) {
     el.syncStatus.textContent = `Backfill lỗi: ${e.message}`;
   }
+});
+
+
+el.phaseSelect?.addEventListener('change', () => {
+  state.phase = el.phaseSelect.value;
+  save();
+  renderPhaseNote();
 });
