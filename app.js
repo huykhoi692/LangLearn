@@ -1,6 +1,11 @@
 const KEY = 'langlearn_ai_daily_v4';
 const dateKey = new Date().toISOString().slice(0, 10);
 
+const SUPABASE_URL = 'https://iuqnocgdycsqyghmlgqm.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1cW5vY2dkeWNzcXlnaG1sZ3FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNTY5MzgsImV4cCI6MjA5NDgzMjkzOH0.0_qLuj2STM7besYdmo05I2m12xwRbhKievZNEX5T0FM';
+const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+
 const el = {
   apiKey: document.getElementById('api-key'),
   modelName: document.getElementById('model-name'),
@@ -37,7 +42,12 @@ const el = {
   vocabQuizScore: document.getElementById('vocab-quiz-score'),
   grammarPractice: document.getElementById('grammar-practice'),
   checkGrammar: document.getElementById('check-grammar'),
-  grammarResult: document.getElementById('grammar-result')
+  grammarResult: document.getElementById('grammar-result'),
+  authEmail: document.getElementById('auth-email'),
+  authPassword: document.getElementById('auth-password'),
+  authLogin: document.getElementById('auth-login'),
+  authLogout: document.getElementById('auth-logout'),
+  authStatus: document.getElementById('auth-status')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -120,7 +130,7 @@ function renderChecklist() {
   el.todayDate.textContent = `Hôm nay: ${dateKey}`;
   el.checklist.innerHTML = day.tasks.map((t, i) => `<label class="task-item"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span>${sanitize(t.label)}</span><small>${t.duration} phút</small></label>`).join('');
   el.checklist.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
-    const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); renderStats();
+    const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderStats();
   }));
 }
 
@@ -182,6 +192,7 @@ if (el.generatePlan) el.generatePlan.addEventListener('click', async () => {
     state.days[dateKey].plan = plan;
     state.days[dateKey].tasks = (plan.checklist || []).map(t => ({ ...t, done: false }));
     save();
+    await upsertDayToSupabase(dateKey, state.days[dateKey]);
     renderPlan(plan);
     renderChecklist();
     renderStats();
@@ -305,7 +316,12 @@ function init() {
   renderGrammarTools();
 }
 
-init();
+async function bootstrap() {
+  init();
+  await loadTodayFromSupabase();
+  if (state.days[dateKey].plan) { renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
+}
+bootstrap();
 
 
 el.testApi?.addEventListener('click', async () => {
@@ -324,3 +340,79 @@ el.vocabFlashToggle?.addEventListener('click', toggleFlashMeaning);
 el.checkGrammar?.addEventListener('click', checkGrammarAnswers);
 
 el.vocabQuizNext?.addEventListener('click', renderOneVocabQuestion);
+
+
+async function currentUser() {
+  const { data } = await supa.auth.getUser();
+  return data.user;
+}
+
+async function upsertDayToSupabase(studyDate, dayData) {
+  const user = await currentUser();
+  if (!user || !dayData?.plan) return;
+
+  const { data: planRow, error: planErr } = await supa.from('daily_plans').upsert({
+    user_id: user.id,
+    study_date: studyDate,
+    model_name: state.settings.model || 'gemini-1.5-flash',
+    plan_json: dayData.plan
+  }, { onConflict: 'user_id,study_date' }).select('id').single();
+  if (planErr) throw planErr;
+
+  await supa.from('daily_tasks').delete().eq('daily_plan_id', planRow.id);
+  const rows = (dayData.tasks || []).map((t, i) => ({
+    daily_plan_id: planRow.id,
+    user_id: user.id,
+    task_key: `task_${i + 1}`,
+    label: t.label,
+    duration_min: t.duration || 15,
+    is_done: !!t.done
+  }));
+  if (rows.length) await supa.from('daily_tasks').insert(rows);
+}
+
+async function loadTodayFromSupabase() {
+  const user = await currentUser();
+  if (!user) return false;
+
+  const { data: planRow, error } = await supa.from('daily_plans').select('id,plan_json').eq('user_id', user.id).eq('study_date', dateKey).maybeSingle();
+  if (error || !planRow) return false;
+  const { data: tasks } = await supa.from('daily_tasks').select('label,duration_min,is_done').eq('daily_plan_id', planRow.id).order('created_at');
+
+  state.days[dateKey] = {
+    plan: planRow.plan_json,
+    tasks: (tasks || []).map(t => ({ label: t.label, duration: t.duration_min, done: t.is_done }))
+  };
+  save();
+  return true;
+}
+
+async function migrateAllLocalToSupabase() {
+  const user = await currentUser();
+  if (!user) throw new Error('Chưa đăng nhập');
+  const days = Object.entries(state.days || {});
+  for (const [d, v] of days) {
+    if (v?.plan) await upsertDayToSupabase(d, v);
+  }
+}
+
+
+el.authLogin?.addEventListener('click', async () => {
+  el.authStatus.textContent = 'Đang đăng nhập...';
+  const { error } = await supa.auth.signInWithPassword({ email: el.authEmail.value.trim(), password: el.authPassword.value });
+  if (error) { el.authStatus.textContent = `Lỗi đăng nhập: ${error.message}`; return; }
+  el.authStatus.textContent = 'Đăng nhập thành công ✅ đang migrate dữ liệu local...';
+  try {
+    await migrateAllLocalToSupabase();
+    await loadTodayFromSupabase();
+    if (state.days[dateKey].plan) { renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
+    el.authStatus.textContent = 'Đăng nhập + migrate toàn bộ thành công ✅';
+  } catch (e) {
+    el.authStatus.textContent = `Đăng nhập ok nhưng migrate lỗi: ${e.message}`;
+  }
+});
+
+el.authLogout?.addEventListener('click', async () => {
+  await supa.auth.signOut();
+  el.authStatus.textContent = 'Đã đăng xuất.';
+});

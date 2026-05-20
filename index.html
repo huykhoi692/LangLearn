@@ -31,6 +31,24 @@
       <p id="api-status" class="muted"></p>
     </section>
 
+    
+    <section class="card">
+      <h2>Đăng nhập Supabase</h2>
+      <div class="api-grid">
+        <label>Email
+          <input id="auth-email" value="khois2p@gmail.com" />
+        </label>
+        <label>Password
+          <input id="auth-password" type="password" value="123ronaldo" />
+        </label>
+      </div>
+      <div class="row">
+        <button id="auth-login">Đăng nhập</button>
+        <button id="auth-logout" class="ghost">Đăng xuất</button>
+      </div>
+      <p id="auth-status" class="muted"></p>
+    </section>
+
     <section class="card stats-row">
       <div><span id="completed-days">0</span><small>Ngày hoàn thành</small></div>
       <div><span id="today-progress">0%</span><small>Tiến độ hôm nay</small></div>
@@ -117,6 +135,7 @@
 
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>
 </html>
