@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LangLearn - Lộ trình IELTS/TOEIC</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="container page-header">
+    <h1>🎯 LangLearn - Học theo lộ trình cá nhân</h1>
+    <p>Thiết kế cho mục tiêu <strong>IELTS 6.5 + TOEIC 750</strong>, học linh hoạt theo lịch làm việc thực tế.</p>
+  </header>
+
+  <main class="container layout">
+    <section class="card stats-row">
+      <div><span id="completed-days">0</span><small>Ngày hoàn thành</small></div>
+      <div><span id="today-progress">0%</span><small>Tiến độ hôm nay</small></div>
+      <div><span id="streak">0</span><small>Streak (ngày)</small></div>
+      <div><span id="weekly-time">0h</span><small>Giờ/tuần đã học</small></div>
+    </section>
+
+    <section class="card">
+      <h2>Lộ trình 3 giai đoạn</h2>
+      <div id="phase-tabs" class="phase-tabs"></div>
+      <div id="phase-detail" class="phase-detail"></div>
+    </section>
+
+    <section class="card">
+      <h2>Checklist hôm nay</h2>
+      <p id="today-date"></p>
+      <div id="daily-checklist" class="checklist"></div>
+      <textarea id="daily-note" rows="3" placeholder="Ghi chú nhanh: hôm nay bạn gặp khó khăn gì? cần chỉnh gì ngày mai?"></textarea>
+      <div class="row">
+        <button id="save-note">Lưu ghi chú hôm nay</button>
+        <button id="reset-today" class="ghost">Reset checklist hôm nay</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Đánh giá cuối ngày</h2>
+      <form id="review-form" class="review-form">
+        <label>Mức tập trung (1-5)
+          <input id="focus-score" type="number" min="1" max="5" required>
+        </label>
+        <label>Mức năng lượng (1-5)
+          <input id="energy-score" type="number" min="1" max="5" required>
+        </label>
+        <label>Tự chấm hiệu quả học (0-100)
+          <input id="effectiveness" type="number" min="0" max="100" required>
+        </label>
+        <button type="submit">Lưu đánh giá</button>
+      </form>
+      <p id="coach-feedback" class="feedback"></p>
+    </section>
+
+    <section class="card full">
+      <h2>Điểm yếu người Việt cần drill mỗi ngày</h2>
+      <ul>
+        <li><strong>Articles:</strong> a / an / the / zero article</li>
+        <li><strong>Prepositions:</strong> in / on / at / for / to</li>
+        <li><strong>Tenses:</strong> thì hiện tại - quá khứ - hiện tại hoàn thành</li>
+      </ul>
+      <p>Gợi ý: mỗi ngày dành 5-10 phút sửa lỗi cũ sẽ hiệu quả hơn học thật nhiều kiến thức mới.</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
