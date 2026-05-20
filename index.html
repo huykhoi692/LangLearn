@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LangLearn - Lộ trình IELTS/TOEIC</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="container page-header">
+    <h1>🎯 LangLearn - AI Daily Study Generator</h1>
+    <p>Sinh dữ liệu học mỗi ngày cho đủ <strong>4 kỹ năng + từ vựng + ngữ pháp</strong>, phù hợp lịch bận.</p>
+  </header>
+
+  <main class="container layout">
+    <section class="card">
+      <h2>Cấu hình API</h2>
+      <div class="api-grid">
+        <label>Gemini API Key
+          <input id="api-key" type="password" placeholder="Dán API key ở đây" />
+        </label>
+        <label>Model tiết kiệm chi phí
+          <input id="model-name" value="gemini-1.5-flash" />
+        </label>
+      </div>
+      <div class="row">
+        <button id="save-api">Lưu cấu hình</button>
+        <button id="test-api" class="ghost">Test kết nối</button>
+        <button id="clear-api" class="ghost">Xóa key</button>
+      </div>
+      <p id="api-status" class="muted"></p>
+    </section>
+
+    <section class="card stats-row">
+      <div><span id="completed-days">0</span><small>Ngày hoàn thành</small></div>
+      <div><span id="today-progress">0%</span><small>Tiến độ hôm nay</small></div>
+      <div><span id="streak">0</span><small>Streak (ngày)</small></div>
+      <div><span id="weekly-time">0h</span><small>Giờ/tuần đã học</small></div>
+    </section>
+
+    <section class="card">
+      <h2>Sinh dữ liệu học trong ngày (AI)</h2>
+      <p class="muted">Gồm Reading, Listening (YouTube), Speaking, Writing, Vocabulary, Grammar.</p>
+      <div class="row">
+        <button id="generate-plan">Sinh kế hoạch hôm nay</button>
+      </div>
+      <p id="gen-status" class="muted"></p>
+    </section>
+
+    <section class="card">
+      <h2>Checklist hôm nay</h2>
+      <p id="today-date"></p>
+      <div id="daily-checklist" class="checklist"></div>
+    </section>
+
+    <section class="card full">
+      <h2>Reading</h2>
+      <div id="reading-box"></div>
+    </section>
+
+    <section class="card">
+      <h2>Listening</h2>
+      <div id="listening-box"></div>
+    </section>
+
+    <section class="card">
+      <h2>Speaking</h2>
+      <div id="speaking-box"></div>
+      <textarea id="speaking-answer" rows="4" placeholder="Nhập câu trả lời speaking (dàn ý hoặc full script)..."></textarea>
+      <button id="check-speaking">Chấm Speaking</button>
+      <p id="speaking-feedback" class="feedback"></p>
+    </section>
+
+    <section class="card">
+      <h2>Writing</h2>
+      <div id="writing-box"></div>
+      <textarea id="writing-answer" rows="6" placeholder="Nhập đoạn writing của bạn..."></textarea>
+      <button id="check-writing">Chấm Writing</button>
+      <p id="writing-feedback" class="feedback"></p>
+    </section>
+
+    <section class="card">
+      <h2>Vocabulary (hôm nay)</h2>
+      <div id="vocab-box" class="vocab-list"></div>
+    </section>
+
+    <section class="card">
+      <h2>Grammar drills (hôm nay)</h2>
+      <div id="grammar-box" class="vocab-list"></div>
+    </section>
+
+
+    <section class="card">
+      <h2>Công cụ học từ vựng</h2>
+      <div class="row">
+        <button id="vocab-flash-next">Thẻ tiếp theo</button>
+        <button id="vocab-flash-toggle" class="ghost">Hiện nghĩa</button>
+      </div>
+      <div id="vocab-flashcard" class="flashcard">Bấm "Thẻ tiếp theo" để bắt đầu.</div>
+      <div id="vocab-practice" class="vocab-quiz"></div>
+      <p id="vocab-practice-result" class="feedback"></p>
+    </section>
+
+    <section class="card">
+      <h2>Công cụ học ngữ pháp</h2>
+      <p class="muted">Làm nhanh các bài grammar trong ngày rồi bấm kiểm tra.</p>
+      <div id="grammar-practice" class="grammar-practice"></div>
+      <div class="row">
+        <button id="check-grammar">Kiểm tra ngữ pháp</button>
+      </div>
+      <p id="grammar-result" class="feedback"></p>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
