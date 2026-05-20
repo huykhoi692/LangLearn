@@ -7,7 +7,7 @@ const el = {
   saveApi: document.getElementById('save-api'),
   clearApi: document.getElementById('clear-api'),
   apiStatus: document.getElementById('api-status'),
-  genPlan: document.getElementById('generate-plan'),
+  generatePlan: document.getElementById('generate-plan'),
   genStatus: document.getElementById('gen-status'),
   checklist: document.getElementById('daily-checklist'),
   todayDate: document.getElementById('today-date'),
@@ -110,9 +110,12 @@ function renderStats() {
   });
 
   let streak = 0;
-  days.sort().reverse().forEach(d => {
-    if (state.days[d].tasks.length && state.days[d].tasks.every(t => t.done) && streak === days.sort().reverse().indexOf(d)) streak += 1;
-  });
+  const sorted = [...days].sort().reverse();
+  for (const d of sorted) {
+    const doneAll = state.days[d].tasks.length && state.days[d].tasks.every(t => t.done);
+    if (doneAll) streak += 1;
+    else break;
+  }
 
   el.completedDays.textContent = completed;
   el.todayProgress.textContent = `${pct}%`;
@@ -145,7 +148,7 @@ el.clearApi.addEventListener('click', () => {
   el.apiStatus.textContent = 'Đã xóa API key.';
 });
 
-el.generatePlan.addEventListener('click', async () => {
+if (el.generatePlan) el.generatePlan.addEventListener('click', async () => {
   el.genStatus.textContent = 'Đang sinh dữ liệu học hôm nay...';
   try {
     const plan = await generateDailyPlan();
@@ -172,6 +175,9 @@ el.checkWriting.addEventListener('click', () => {
 });
 
 function init() {
+  if (window.location.protocol === 'file:') {
+    el.genStatus.textContent = 'Bạn đang mở bằng file:// nên có thể gặp lỗi bảo mật khi gọi API. Hãy chạy: python3 -m http.server 8000 rồi mở http://localhost:8000';
+  }
   el.apiKey.value = state.settings.apiKey || '';
   el.modelName.value = state.settings.model || 'gemini-1.5-flash-8b';
   if (state.days[dateKey].plan) renderPlan(state.days[dateKey].plan);
