@@ -10,7 +10,7 @@ App học IELTS/TOEIC có AI sinh dữ liệu học **đủ 1 ngày** cho:
 
 ## Điểm chính
 - Có ô nhập API key để thay key khi hết quota.
-- Có ô nhập model để dùng model rẻ hơn (mặc định: `gemini-1.5-flash-8b`).
+- Có ô nhập model để dùng model rẻ hơn (mặc định: `gemini-1.5-flash`).
 - Lưu local bằng `localStorage`.
 
 ## Chạy dự án
@@ -18,3 +18,8 @@ App học IELTS/TOEIC có AI sinh dữ liệu học **đủ 1 ngày** cho:
 python3 -m http.server 8000
 ```
 Mở `http://localhost:8000`.
+
+
+## Lỗi 404 thường gặp
+
+Nếu gặp `API lỗi 404`, thường là do model name không hợp lệ cho endpoint. Hãy bấm **Test kết nối** và thử model `gemini-1.5-flash`.

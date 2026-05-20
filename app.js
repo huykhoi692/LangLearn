@@ -6,6 +6,7 @@ const el = {
   modelName: document.getElementById('model-name'),
   saveApi: document.getElementById('save-api'),
   clearApi: document.getElementById('clear-api'),
+  testApi: document.getElementById('test-api'),
   apiStatus: document.getElementById('api-status'),
   generatePlan: document.getElementById('generate-plan'),
   genStatus: document.getElementById('gen-status'),
@@ -30,7 +31,7 @@ const el = {
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
-if (!state.settings) state.settings = { apiKey: '', model: 'gemini-1.5-flash-8b' };
+if (!state.settings) state.settings = { apiKey: '', model: 'gemini-1.5-flash' };
 if (!state.days) state.days = {};
 if (!state.days[dateKey]) state.days[dateKey] = { plan: null, tasks: [] };
 
@@ -40,7 +41,7 @@ function sanitize(text = '') { return String(text).replace(/[<>]/g, ''); }
 
 async function callGemini(prompt) {
   const apiKey = state.settings.apiKey;
-  const model = state.settings.model || 'gemini-1.5-flash-8b';
+  const model = state.settings.model || 'gemini-1.5-flash';
   if (!apiKey) throw new Error('Chưa có API key');
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -52,10 +53,26 @@ async function callGemini(prompt) {
       generationConfig: { response_mime_type: 'application/json', temperature: 0.7 }
     })
   });
-  if (!res.ok) throw new Error(`API lỗi ${res.status}`);
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const err = await res.json();
+      detail = err?.error?.message || '';
+    } catch (_) {}
+    if (res.status === 404) {
+      throw new Error('Model không tồn tại hoặc không được hỗ trợ với endpoint này. Hãy đổi model (gợi ý: gemini-1.5-flash). ' + detail);
+    }
+    throw new Error(`API lỗi ${res.status}${detail ? `: ${detail}` : ''}`);
+  }
   const data = await res.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
   return JSON.parse(text);
+}
+
+
+async function testApiConnection() {
+  const result = await callGemini('Trả JSON thuần: {"ok":true,"message":"connected"}');
+  return result;
 }
 
 async function generateDailyPlan() {
@@ -136,7 +153,7 @@ async function checkAnswer(skill, question, answer, outEl) {
 
 el.saveApi.addEventListener('click', () => {
   state.settings.apiKey = el.apiKey.value.trim();
-  state.settings.model = el.modelName.value.trim() || 'gemini-1.5-flash-8b';
+  state.settings.model = el.modelName.value.trim() || 'gemini-1.5-flash';
   save();
   el.apiStatus.textContent = 'Đã lưu cấu hình API ✅';
 });
@@ -179,10 +196,21 @@ function init() {
     el.genStatus.textContent = 'Bạn đang mở bằng file:// nên có thể gặp lỗi bảo mật khi gọi API. Hãy chạy: python3 -m http.server 8000 rồi mở http://localhost:8000';
   }
   el.apiKey.value = state.settings.apiKey || '';
-  el.modelName.value = state.settings.model || 'gemini-1.5-flash-8b';
+  el.modelName.value = state.settings.model || 'gemini-1.5-flash';
   if (state.days[dateKey].plan) renderPlan(state.days[dateKey].plan);
   renderChecklist();
   renderStats();
 }
 
 init();
+
+
+el.testApi?.addEventListener('click', async () => {
+  el.apiStatus.textContent = 'Đang test kết nối...';
+  try {
+    const r = await testApiConnection();
+    el.apiStatus.textContent = `Kết nối OK ✅ (${JSON.stringify(r).slice(0, 80)})`;
+  } catch (e) {
+    el.apiStatus.textContent = `Test thất bại: ${e.message}`;
+  }
+});
