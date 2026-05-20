@@ -47,7 +47,9 @@ const el = {
   authPassword: document.getElementById('auth-password'),
   authLogin: document.getElementById('auth-login'),
   authLogout: document.getElementById('auth-logout'),
-  authStatus: document.getElementById('auth-status')
+  authStatus: document.getElementById('auth-status'),
+  syncBackfill: document.getElementById('sync-backfill'),
+  syncStatus: document.getElementById('sync-status')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -95,8 +97,44 @@ async function testApiConnection() {
   return result;
 }
 
+function getDifficultyLevel() {
+  const days = Object.keys(state.days || {}).sort();
+  if (!days.length) return 1;
+  const recent = days.slice(-7).map(d => state.days[d]).filter(Boolean);
+  let doneScore = 0;
+  recent.forEach(day => {
+    const tasks = day.tasks || [];
+    if (!tasks.length) return;
+    doneScore += tasks.filter(t => t.done).length / tasks.length;
+  });
+  const avg = recent.length ? doneScore / recent.length : 0;
+  return Math.max(1, Math.min(7, 1 + Math.floor(avg * 6)));
+}
+
+function getRecentHistorySummary(limitDays = 14) {
+  const days = Object.keys(state.days || {}).sort().slice(-limitDays);
+  const words = [];
+  const points = [];
+  days.forEach(d => {
+    const plan = state.days[d]?.plan;
+    (plan?.vocabulary || []).forEach(v => words.push(v.word));
+    (plan?.grammar || []).forEach(g => points.push(g.point));
+  });
+  return {
+    recentWords: [...new Set(words)].slice(-120),
+    recentGrammarPoints: [...new Set(points)].slice(-120)
+  };
+}
+
 async function generateDailyPlan() {
+  const level = getDifficultyLevel();
+  const history = getRecentHistorySummary(14);
   const prompt = `Tạo JSON thuần cho kế hoạch học tiếng Anh trong 1 ngày cho người Việt mục tiêu IELTS 6.5 + TOEIC 750.
+Độ khó hiện tại: ${level}/7 (1 dễ -> 7 khó).
+Tăng độ khó theo level: level thấp dùng câu ngắn + từ B1; level cao dùng câu dài hơn + từ học thuật B2/C1.
+KHÔNG lặp lại từ/chủ điểm sau (14 ngày gần đây):
+- Từ vựng đã dùng: ${history.recentWords.join(', ') || 'none'}
+- Grammar points đã dùng: ${history.recentGrammarPoints.join(', ') || 'none'}
 Schema:
 {
  "reading":{"title":"","passage":"","questions":["","",""],"duration":25},
@@ -193,6 +231,7 @@ if (el.generatePlan) el.generatePlan.addEventListener('click', async () => {
     state.days[dateKey].tasks = (plan.checklist || []).map(t => ({ ...t, done: false }));
     save();
     await upsertDayToSupabase(dateKey, state.days[dateKey]);
+    await loadTodayVocabGrammarFromSupabase().catch(() => {});
     renderPlan(plan);
     renderChecklist();
     renderStats();
@@ -219,9 +258,11 @@ el.checkWriting.addEventListener('click', () => {
 let currentFlashIndex = -1;
 let flashShowMeaning = false;
 let vocabQuizState = { total: 0, correct: 0 };
+let dbLoadedVocab = [];
+let dbLoadedGrammar = [];
 
 function renderVocabTools() {
-  const vocab = state.days[dateKey].plan?.vocabulary || [];
+  const vocab = dbLoadedVocab.length ? dbLoadedVocab : (state.days[dateKey].plan?.vocabulary || []);
   if (!vocab.length) {
     el.vocabFlashcard.textContent = 'Hãy sinh kế hoạch trước để có từ vựng.';
     el.vocabPractice.innerHTML = '';
@@ -233,7 +274,7 @@ function renderVocabTools() {
 }
 
 function renderOneVocabQuestion() {
-  const vocab = state.days[dateKey].plan?.vocabulary || [];
+  const vocab = dbLoadedVocab.length ? dbLoadedVocab : (state.days[dateKey].plan?.vocabulary || []);
   if (!vocab.length) return;
   const target = vocab[Math.floor(Math.random() * vocab.length)];
   const options = [target.meaning];
@@ -261,7 +302,7 @@ function renderOneVocabQuestion() {
 }
 
 function nextFlashcard() {
-  const vocab = state.days[dateKey].plan?.vocabulary || [];
+  const vocab = dbLoadedVocab.length ? dbLoadedVocab : (state.days[dateKey].plan?.vocabulary || []);
   if (!vocab.length) {
     el.vocabFlashcard.textContent = 'Hãy sinh kế hoạch trước để có từ vựng.';
     return;
@@ -272,7 +313,7 @@ function nextFlashcard() {
 }
 
 function toggleFlashMeaning() {
-  const vocab = state.days[dateKey].plan?.vocabulary || [];
+  const vocab = dbLoadedVocab.length ? dbLoadedVocab : (state.days[dateKey].plan?.vocabulary || []);
   if (currentFlashIndex < 0 || !vocab.length) return;
   flashShowMeaning = !flashShowMeaning;
   const w = vocab[currentFlashIndex];
@@ -280,7 +321,7 @@ function toggleFlashMeaning() {
 }
 
 function renderGrammarTools() {
-  const grammar = state.days[dateKey].plan?.grammar || [];
+  const grammar = dbLoadedGrammar.length ? dbLoadedGrammar : (state.days[dateKey].plan?.grammar || []);
   if (!grammar.length) {
     el.grammarPractice.innerHTML = '<p class="muted">Hãy sinh kế hoạch trước để có bài grammar.</p>';
     return;
@@ -290,7 +331,7 @@ function renderGrammarTools() {
 }
 
 function checkGrammarAnswers() {
-  const grammar = state.days[dateKey].plan?.grammar || [];
+  const grammar = dbLoadedGrammar.length ? dbLoadedGrammar : (state.days[dateKey].plan?.grammar || []);
   const inputs = [...document.querySelectorAll('.grammar-input')];
   if (!grammar.length || !inputs.length) return;
   let correct = 0;
@@ -319,7 +360,7 @@ function init() {
 async function bootstrap() {
   init();
   await loadTodayFromSupabase();
-  if (state.days[dateKey].plan) { renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
+  if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
 }
 bootstrap();
 
@@ -368,7 +409,35 @@ async function upsertDayToSupabase(studyDate, dayData) {
     duration_min: t.duration || 15,
     is_done: !!t.done
   }));
-  if (rows.length) await supa.from('daily_tasks').insert(rows);
+  if (rows.length) {
+    const { error: taskErr } = await supa.from('daily_tasks').insert(rows);
+    if (taskErr) throw new Error('daily_tasks sync lỗi: ' + taskErr.message);
+  }
+
+  const vocabRows = (dayData.plan?.vocabulary || []).map(v => ({
+    user_id: user.id,
+    study_date: studyDate,
+    word: String(v.word || '').trim(),
+    meaning: String(v.meaning || '').trim(),
+    example: String(v.example || '').trim(),
+    topic: String(v.topic || '').trim()
+  })).filter(v => v.word && v.meaning);
+  if (vocabRows.length) {
+    const { error: vocabErr } = await supa.from('vocab_items').upsert(vocabRows, { onConflict: 'user_id,study_date,word' });
+    if (vocabErr) throw new Error('vocab_items sync lỗi: ' + vocabErr.message);
+  }
+
+  const grammarRows = (dayData.plan?.grammar || []).map(g => ({
+    user_id: user.id,
+    study_date: studyDate,
+    point: String(g.point || '').trim(),
+    exercise: String(g.exercise || '').trim(),
+    answer: String(g.answer || '').trim()
+  })).filter(g => g.point && g.exercise && g.answer);
+  if (grammarRows.length) {
+    const { error: grammarErr } = await supa.from('grammar_items').upsert(grammarRows, { onConflict: 'user_id,study_date,point,exercise' });
+    if (grammarErr) throw new Error('grammar_items sync lỗi: ' + grammarErr.message);
+  }
 }
 
 async function loadTodayFromSupabase() {
@@ -397,6 +466,32 @@ async function migrateAllLocalToSupabase() {
 }
 
 
+
+async function loadTodayVocabGrammarFromSupabase() {
+  const user = await currentUser();
+  if (!user) return;
+  const { data: vocabData, error: ve } = await supa.from('vocab_items').select('word,meaning,example,topic').eq('user_id', user.id).eq('study_date', dateKey);
+  if (ve) throw new Error('load vocab lỗi: ' + ve.message);
+  const { data: grammarData, error: ge } = await supa.from('grammar_items').select('point,exercise,answer').eq('user_id', user.id).eq('study_date', dateKey);
+  if (ge) throw new Error('load grammar lỗi: ' + ge.message);
+  dbLoadedVocab = (vocabData || []).map(v => ({ word: v.word, meaning: v.meaning, example: v.example, topic: v.topic }));
+  dbLoadedGrammar = (grammarData || []).map(g => ({ point: g.point, exercise: g.exercise, answer: g.answer }));
+}
+
+async function backfillAllVocabGrammarFromDailyPlans() {
+  const user = await currentUser();
+  if (!user) throw new Error('Chưa đăng nhập');
+  const { data: plans, error } = await supa.from('daily_plans').select('study_date,plan_json').eq('user_id', user.id);
+  if (error) throw error;
+  let dayCount = 0;
+  for (const row of (plans || [])) {
+    const dayData = { plan: row.plan_json, tasks: [] };
+    await upsertDayToSupabase(row.study_date, dayData);
+    dayCount += 1;
+  }
+  return dayCount;
+}
+
 el.authLogin?.addEventListener('click', async () => {
   el.authStatus.textContent = 'Đang đăng nhập...';
   const { error } = await supa.auth.signInWithPassword({ email: el.authEmail.value.trim(), password: el.authPassword.value });
@@ -405,7 +500,7 @@ el.authLogin?.addEventListener('click', async () => {
   try {
     await migrateAllLocalToSupabase();
     await loadTodayFromSupabase();
-    if (state.days[dateKey].plan) { renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
+    if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
     el.authStatus.textContent = 'Đăng nhập + migrate toàn bộ thành công ✅';
   } catch (e) {
     el.authStatus.textContent = `Đăng nhập ok nhưng migrate lỗi: ${e.message}`;
@@ -415,4 +510,18 @@ el.authLogin?.addEventListener('click', async () => {
 el.authLogout?.addEventListener('click', async () => {
   await supa.auth.signOut();
   el.authStatus.textContent = 'Đã đăng xuất.';
+});
+
+
+el.syncBackfill?.addEventListener('click', async () => {
+  el.syncStatus.textContent = 'Đang backfill vocab/grammar từ daily_plans...';
+  try {
+    const count = await backfillAllVocabGrammarFromDailyPlans();
+    await loadTodayVocabGrammarFromSupabase().catch(() => {});
+    renderVocabTools();
+    renderGrammarTools();
+    el.syncStatus.textContent = `Backfill thành công ${count} ngày ✅`;
+  } catch (e) {
+    el.syncStatus.textContent = `Backfill lỗi: ${e.message}`;
+  }
 });

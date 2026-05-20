@@ -29,3 +29,8 @@ Nếu gặp `API lỗi 404`, thường là do model name không hợp lệ cho e
 - Flashcard từ vựng: lật thẻ từ/nghĩa + ví dụ.
 - Quiz nghĩa từ nhanh từ bộ từ trong ngày.
 - Bài tập grammar có ô nhập đáp án và chấm nhanh tại chỗ.
+
+## Adaptive + Anti-duplicate
+- App tăng độ khó theo tiến độ hoàn thành task 7 ngày gần nhất (level 1-7).
+- Prompt sinh dữ liệu có blacklist từ vựng/chủ điểm ngữ pháp 14 ngày gần nhất để hạn chế trùng.
+- Khi sync Supabase, vocab/grammar được ghi thêm vào `vocab_items` và `grammar_items`.
