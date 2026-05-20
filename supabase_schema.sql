@@ -50,6 +50,7 @@ create table if not exists public.vocab_items (
   meaning text not null,
   example text,
   topic text,
+  is_mastered boolean not null default false,
   created_at timestamptz not null default now(),
   unique(user_id, study_date, word)
 );

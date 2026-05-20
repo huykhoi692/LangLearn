@@ -57,10 +57,14 @@ const el = {
   phaseNote: document.getElementById('phase-note'),
   readingHighlight: document.getElementById('reading-highlight'),
   readingHidePassage: document.getElementById('reading-hide-passage'),
+  readingTranslateToggle: document.getElementById('reading-translate-toggle'),
+  readingTranslateStatus: document.getElementById('reading-translate-status'),
+  readingTranslateTooltip: document.getElementById('reading-translate-tooltip'),
   readingKeywords: document.getElementById('reading-keywords'),
   readingVocabInput: document.getElementById('reading-vocab-input'),
   readingSaveWord: document.getElementById('reading-save-word'),
-  readingWordList: document.getElementById('reading-word-list')
+  readingWordList: document.getElementById('reading-word-list'),
+  readingNoteStatus: document.getElementById('reading-note-status')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -69,8 +73,18 @@ if (!state.days) state.days = {};
 if (!state.days[dateKey]) state.days[dateKey] = { plan: null, tasks: [] };
 if (!state.phase) state.phase = 'phase1';
 if (!state.readingNotebook) state.readingNotebook = [];
+if (!state.readingNotes) state.readingNotes = [];
+let cloudOnlyMode = false;
+let readingTranslateEnabled = false;
+let readingDraftNote = null;
 
-function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function save() {
+  if (cloudOnlyMode) {
+    localStorage.setItem(KEY, JSON.stringify({ settings: state.settings }));
+    return;
+  }
+  localStorage.setItem(KEY, JSON.stringify(state));
+}
 
 function sanitize(text = '') { return String(text).replace(/[<>]/g, ''); }
 
@@ -170,6 +184,28 @@ Schema:
  "vocabulary":[{"word":"","meaning":"","example":""}],
  "grammar":[{"point":"","exercise":"","answer":""}],
  "checklist":[{"label":"","duration":15}]
+}
+
+function getUnmasteredReadingNotes() {
+  return (state.readingNotes || []).filter(n => n.selectedForDb && !n.mastered && n.word && n.meaning);
+}
+
+function applyNotesToVocabulary(plan) {
+  const targetCount = 12;
+  const notePool = getUnmasteredReadingNotes().map(n => ({ word: n.word, meaning: n.meaning, example: n.example || '' }));
+  const existing = (plan.vocabulary || []).filter(v => v.word && v.meaning);
+  const seen = new Set();
+  const merged = [];
+  notePool.forEach(v => {
+    const key = String(v.word).trim().toLowerCase();
+    if (key && !seen.has(key)) { seen.add(key); merged.push(v); }
+  });
+  existing.forEach(v => {
+    const key = String(v.word).trim().toLowerCase();
+    if (key && !seen.has(key)) { seen.add(key); merged.push(v); }
+  });
+  plan.vocabulary = merged.slice(0, targetCount);
+  return { usedNotes: Math.min(notePool.length, targetCount), needsFill: notePool.length < targetCount };
 }
 Yêu cầu:
 - vocabulary đúng 12 từ
@@ -290,16 +326,118 @@ function toggleReadingPassage() {
 }
 
 function renderReadingNotebook() {
-  el.readingWordList.innerHTML = state.readingNotebook.map((w,i)=>`<li>${i+1}. ${sanitize(w)}</li>`).join('');
+  el.readingWordList.innerHTML = (state.readingNotes || []).map((n, i) => `
+    <li class="vocab-item">
+      <strong>${i + 1}. ${sanitize(n.word || '')}</strong>
+      <span>Nghĩa: ${sanitize(n.meaning || '')}</span>
+      <small>Ví dụ: ${sanitize(n.example || '')}</small>
+      <label><input type="checkbox" class="note-select-db" data-id="${sanitize(n.id)}" ${n.selectedForDb ? 'checked' : ''}/> Lưu vào DB</label>
+      <label><input type="checkbox" class="note-mastered" data-id="${sanitize(n.id)}" ${n.mastered ? 'checked' : ''}/> Đã thuộc</label>
+    </li>
+  `).join('');
+  el.readingWordList.querySelectorAll('.note-select-db').forEach(inp => inp.addEventListener('change', async (e) => {
+    const id = e.target.dataset.id;
+    const note = state.readingNotes.find(x => x.id === id);
+    if (!note) return;
+    note.selectedForDb = e.target.checked;
+    save();
+    await upsertReadingNoteToSupabase(note).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
+  }));
+  el.readingWordList.querySelectorAll('.note-mastered').forEach(inp => inp.addEventListener('change', async (e) => {
+    const id = e.target.dataset.id;
+    const note = state.readingNotes.find(x => x.id === id);
+    if (!note) return;
+    note.mastered = e.target.checked;
+    save();
+    await upsertReadingNoteToSupabase(note).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
+  }));
+}
+
+function setReadingTranslateStatus(msg) {
+  if (el.readingTranslateStatus) el.readingTranslateStatus.textContent = msg;
+}
+
+function hideReadingTranslateTooltip() {
+  if (!el.readingTranslateTooltip) return;
+  el.readingTranslateTooltip.hidden = true;
+  el.readingTranslateTooltip.innerHTML = '';
+  readingDraftNote = null;
+}
+
+function showReadingTranslateTooltip(html, x, y) {
+  if (!el.readingTranslateTooltip) return;
+  const pad = 12;
+  el.readingTranslateTooltip.innerHTML = html;
+  el.readingTranslateTooltip.hidden = false;
+  const maxX = window.innerWidth - el.readingTranslateTooltip.offsetWidth - pad;
+  const maxY = window.innerHeight - el.readingTranslateTooltip.offsetHeight - pad;
+  el.readingTranslateTooltip.style.left = `${Math.max(pad, Math.min(x + 8, maxX))}px`;
+  el.readingTranslateTooltip.style.top = `${Math.max(pad, Math.min(y + 8, maxY))}px`;
+}
+
+function maybeSaveReadingDraftNote() {
+  if (!readingDraftNote) return;
+  const wordEl = document.getElementById('reading-note-word');
+  const meaningEl = document.getElementById('reading-note-meaning');
+  const exampleEl = document.getElementById('reading-note-example');
+  const word = (wordEl?.value || readingDraftNote.word || '').trim();
+  const meaning = (meaningEl?.value || '').trim();
+  const example = (exampleEl?.value || '').trim();
+  if (!word || !meaning) return;
+  const existed = state.readingNotes.find(n => n.word.toLowerCase() === word.toLowerCase());
+  if (existed) {
+    if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Từ "${word}" đã tồn tại, hãy tự chọn giữ bản nào.`;
+    return;
+  }
+  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: false, mastered: false, source: 'selection' });
+  state.readingNotes = state.readingNotes.slice(0, 200);
+  save();
+  renderReadingNotebook();
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu note "${word}".`;
+}
+
+function showReadingNotePopover(word, x, y) {
+  readingDraftNote = { word };
+  showReadingTranslateTooltip(`
+    <div><strong>Thêm note</strong></div>
+    <label>Từ/cụm từ<input id="reading-note-word" value="${sanitize(word)}" /></label>
+    <label>Nghĩa<input id="reading-note-meaning" placeholder="Nhập nghĩa tiếng Việt" /></label>
+    <label>Ví dụ<input id="reading-note-example" placeholder="Ví dụ ngắn (tuỳ chọn)" /></label>
+    <small class="muted">Click ra ngoài để lưu note.</small>
+  `, x, y);
+}
+
+async function translateSelectedReadingText() {
+  if (!readingTranslateEnabled) return;
+  const selection = window.getSelection();
+  const text = (selection?.toString() || '').trim().replace(/\s+/g, ' ');
+  if (!text || text.length < 2) { hideReadingTranslateTooltip(); return; }
+  if (!el.readingBox.contains(selection.anchorNode) || !el.readingBox.contains(selection.focusNode)) return;
+  const range = selection.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  showReadingNotePopover(text, rect.right, rect.bottom);
+  setReadingTranslateStatus('Đang note từ/cụm từ. Click ra ngoài để lưu.');
+}
+
+function toggleReadingTranslate() {
+  readingTranslateEnabled = !readingTranslateEnabled;
+  if (el.readingTranslateToggle) el.readingTranslateToggle.textContent = readingTranslateEnabled ? 'Tắt note bôi đen' : 'Bật note bôi đen';
+  setReadingTranslateStatus(readingTranslateEnabled ? 'Đã bật note bôi đen. Hãy chọn một từ/cụm từ trong bài đọc.' : 'Đã tắt note bôi đen.');
+  if (!readingTranslateEnabled) hideReadingTranslateTooltip();
 }
 
 function saveReadingWord() {
-  const w = (el.readingVocabInput.value || '').trim();
-  if (!w) return;
-  state.readingNotebook.unshift(w);
-  state.readingNotebook = [...new Set(state.readingNotebook)].slice(0, 100);
+  const raw = (el.readingVocabInput.value || '').trim();
+  if (!raw) return;
+  const [word, meaning = '', example = ''] = raw.split('|').map(x => x.trim());
+  if (!word || !meaning) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Nhập theo mẫu: word | nghĩa | ví dụ'; return; }
+  const existed = state.readingNotes.find(n => n.word.toLowerCase() === word.toLowerCase());
+  if (existed) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Từ "${word}" đã tồn tại, hãy tự chọn giữ bản nào.`; return; }
+  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: false, mastered: false, source: 'manual' });
+  state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   el.readingVocabInput.value = '';
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Đã thêm note. Tick "Lưu vào DB" nếu muốn đồng bộ.';
   renderReadingNotebook();
 }
 
@@ -376,6 +514,7 @@ if (el.generatePlan) el.generatePlan.addEventListener('click', async () => {
   el.genStatus.textContent = 'Đang sinh dữ liệu học hôm nay...';
   try {
     const plan = await generateDailyPlan();
+    const noteBlend = applyNotesToVocabulary(plan);
     state.days[dateKey].plan = plan;
     state.days[dateKey].tasks = (plan.checklist || []).map(t => ({ ...t, done: false }));
     save();
@@ -386,7 +525,7 @@ if (el.generatePlan) el.generatePlan.addEventListener('click', async () => {
     renderStats();
     renderVocabTools();
     renderGrammarTools();
-    el.genStatus.textContent = 'Đã sinh dữ liệu thành công ✅';
+    el.genStatus.textContent = `Đã sinh dữ liệu thành công ✅ (${noteBlend.usedNotes} từ từ note${noteBlend.needsFill ? ', còn lại do AI bổ sung' : ''}).`;
   } catch (e) {
     el.genStatus.textContent = `Lỗi sinh dữ liệu: ${e.message}`;
   }
@@ -510,6 +649,9 @@ function init() {
 }
 
 async function bootstrap() {
+  const user = await currentUser();
+  cloudOnlyMode = !!user;
+  if (cloudOnlyMode) save();
   init();
   await loadTodayFromSupabase();
   if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
@@ -572,7 +714,8 @@ async function upsertDayToSupabase(studyDate, dayData) {
     word: String(v.word || '').trim(),
     meaning: String(v.meaning || '').trim(),
     example: String(v.example || '').trim(),
-    topic: String(v.topic || '').trim()
+    topic: String(v.topic || '').trim(),
+    is_mastered: !!v.is_mastered
   })).filter(v => v.word && v.meaning);
   if (vocabRows.length) {
     const { error: vocabErr } = await supa.from('vocab_items').upsert(vocabRows, { onConflict: 'user_id,study_date,word' });
@@ -622,12 +765,34 @@ async function migrateAllLocalToSupabase() {
 async function loadTodayVocabGrammarFromSupabase() {
   const user = await currentUser();
   if (!user) return;
-  const { data: vocabData, error: ve } = await supa.from('vocab_items').select('word,meaning,example,topic').eq('user_id', user.id).eq('study_date', dateKey);
+  const { data: vocabData, error: ve } = await supa.from('vocab_items').select('word,meaning,example,topic,is_mastered').eq('user_id', user.id).eq('study_date', dateKey);
   if (ve) throw new Error('load vocab lỗi: ' + ve.message);
   const { data: grammarData, error: ge } = await supa.from('grammar_items').select('point,exercise,answer').eq('user_id', user.id).eq('study_date', dateKey);
   if (ge) throw new Error('load grammar lỗi: ' + ge.message);
-  dbLoadedVocab = (vocabData || []).map(v => ({ word: v.word, meaning: v.meaning, example: v.example, topic: v.topic }));
+  dbLoadedVocab = (vocabData || []).map(v => ({ word: v.word, meaning: v.meaning, example: v.example, topic: v.topic, is_mastered: !!v.is_mastered }));
   dbLoadedGrammar = (grammarData || []).map(g => ({ point: g.point, exercise: g.exercise, answer: g.answer }));
+}
+
+async function upsertReadingNoteToSupabase(note) {
+  const user = await currentUser();
+  if (!user || !note.selectedForDb) return;
+  const row = {
+    user_id: user.id,
+    study_date: dateKey,
+    word: String(note.word || '').trim(),
+    meaning: String(note.meaning || '').trim(),
+    example: String(note.example || '').trim(),
+    topic: 'reading_note',
+    is_mastered: !!note.mastered
+  };
+  const { data: existed } = await supa.from('vocab_items').select('id').eq('user_id', user.id).eq('word', row.word).limit(1);
+  if (existed?.length && el.readingNoteStatus) {
+    el.readingNoteStatus.textContent = `Từ "${row.word}" đã tồn tại trong DB, bạn hãy tự quyết định giữ bản nào.`;
+    return;
+  }
+  const { error } = await supa.from('vocab_items').upsert(row, { onConflict: 'user_id,study_date,word' });
+  if (error) throw new Error('Lưu note vào DB lỗi: ' + error.message);
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu "${row.word}" vào DB.`;
 }
 
 async function backfillAllVocabGrammarFromDailyPlans() {
@@ -648,19 +813,21 @@ el.authLogin?.addEventListener('click', async () => {
   el.authStatus.textContent = 'Đang đăng nhập...';
   const { error } = await supa.auth.signInWithPassword({ email: el.authEmail.value.trim(), password: el.authPassword.value });
   if (error) { el.authStatus.textContent = `Lỗi đăng nhập: ${error.message}`; return; }
-  el.authStatus.textContent = 'Đăng nhập thành công ✅ đang migrate dữ liệu local...';
+  cloudOnlyMode = true;
+  save();
+  el.authStatus.textContent = 'Đăng nhập thành công ✅ cloud-only mode đang bật...';
   try {
-    await migrateAllLocalToSupabase();
     await loadTodayFromSupabase();
     if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); await renderStatsCloudFirst(); renderVocabTools(); renderGrammarTools(); }
-    el.authStatus.textContent = 'Đăng nhập + migrate toàn bộ thành công ✅';
+    el.authStatus.textContent = 'Đăng nhập thành công ✅ (cloud-only, local chỉ giữ API key/model)';
   } catch (e) {
-    el.authStatus.textContent = `Đăng nhập ok nhưng migrate lỗi: ${e.message}`;
+    el.authStatus.textContent = `Đăng nhập ok nhưng load cloud lỗi: ${e.message}`;
   }
 });
 
 el.authLogout?.addEventListener('click', async () => {
   await supa.auth.signOut();
+  cloudOnlyMode = false;
   el.authStatus.textContent = 'Đã đăng xuất.';
 });
 
@@ -688,6 +855,15 @@ el.phaseSelect?.addEventListener('change', () => {
 
 el.readingHighlight?.addEventListener('click', applyReadingKeywordHighlight);
 el.readingHidePassage?.addEventListener('click', toggleReadingPassage);
+el.readingTranslateToggle?.addEventListener('click', toggleReadingTranslate);
+el.readingBox?.addEventListener('mouseup', () => { translateSelectedReadingText().catch(() => {}); });
+document.addEventListener('mousedown', (e) => {
+  if (!el.readingTranslateTooltip || el.readingTranslateTooltip.hidden) return;
+  if (el.readingTranslateTooltip.contains(e.target)) return;
+  if (el.readingBox.contains(e.target)) return;
+  maybeSaveReadingDraftNote();
+  hideReadingTranslateTooltip();
+});
 el.readingSaveWord?.addEventListener('click', saveReadingWord);
 
 el.checkReading?.addEventListener('click', checkReadingAnswers);
