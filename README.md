@@ -1,17 +1,19 @@
 # LangLearn
 
-Ứng dụng web hỗ trợ học IELTS/TOEIC theo lộ trình 3 giai đoạn (dựa trên lịch thực tế bận đi làm):
+Ứng dụng web hỗ trợ học IELTS/TOEIC theo lộ trình 3 giai đoạn (dựa trên lịch thực tế bận đi làm).
 
-- Tab chuyển đổi 3 giai đoạn học (GĐ1, GĐ2, GĐ3)
-- Checklist task hằng ngày theo từng giai đoạn
-- Theo dõi tiến độ: % hôm nay, streak, giờ học tuần, số ngày hoàn thành
-- Ghi chú hằng ngày + tự đánh giá cuối ngày
-- Gợi ý "coach feedback" tự động theo mức hiệu quả học
-- Lưu dữ liệu bằng LocalStorage
+## Tính năng chính
+
+- Theo dõi tiến độ học: % hôm nay, streak, tổng giờ học tuần, số ngày hoàn thành.
+- Checklist task hằng ngày theo từng giai đoạn.
+- Ghi chú + tự đánh giá cuối ngày kèm feedback gợi ý cho ngày sau.
+- **Công cụ từ vựng sinh theo ngày**:
+  - Tự sinh bộ 5 từ/ngày (kèm nghĩa + ví dụ + topic).
+  - Bài tập trắc nghiệm nghĩa từ ngay trong app.
 
 ## Chạy dự án
 
-Mở trực tiếp `index.html` bằng trình duyệt, hoặc:
+Mở trực tiếp `index.html` bằng trình duyệt, hoặc chạy server tĩnh:
 
 ```bash
 python3 -m http.server 8000
