@@ -3,65 +3,65 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LangLearn - Học ngôn ngữ</title>
+  <title>LangLearn - Lộ trình IELTS/TOEIC</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="container">
-    <h1>LangLearn</h1>
-    <p>Ứng dụng web hỗ trợ học từ vựng, làm quiz và theo dõi tiến độ.</p>
+  <header class="container page-header">
+    <h1>🎯 LangLearn - Học theo lộ trình cá nhân</h1>
+    <p>Thiết kế cho mục tiêu <strong>IELTS 6.5 + TOEIC 750</strong>, học linh hoạt theo lịch làm việc thực tế.</p>
   </header>
 
-  <main class="container grid">
+  <main class="container layout">
+    <section class="card stats-row">
+      <div><span id="completed-days">0</span><small>Ngày hoàn thành</small></div>
+      <div><span id="today-progress">0%</span><small>Tiến độ hôm nay</small></div>
+      <div><span id="streak">0</span><small>Streak (ngày)</small></div>
+      <div><span id="weekly-time">0h</span><small>Giờ/tuần đã học</small></div>
+    </section>
+
     <section class="card">
-      <h2>Thêm từ vựng</h2>
-      <form id="vocab-form">
-        <label>Từ mới
-          <input id="word" required placeholder="Ví dụ: diligent" />
+      <h2>Lộ trình 3 giai đoạn</h2>
+      <div id="phase-tabs" class="phase-tabs"></div>
+      <div id="phase-detail" class="phase-detail"></div>
+    </section>
+
+    <section class="card">
+      <h2>Checklist hôm nay</h2>
+      <p id="today-date"></p>
+      <div id="daily-checklist" class="checklist"></div>
+      <textarea id="daily-note" rows="3" placeholder="Ghi chú nhanh: hôm nay bạn gặp khó khăn gì? cần chỉnh gì ngày mai?"></textarea>
+      <div class="row">
+        <button id="save-note">Lưu ghi chú hôm nay</button>
+        <button id="reset-today" class="ghost">Reset checklist hôm nay</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Đánh giá cuối ngày</h2>
+      <form id="review-form" class="review-form">
+        <label>Mức tập trung (1-5)
+          <input id="focus-score" type="number" min="1" max="5" required>
         </label>
-        <label>Nghĩa
-          <input id="meaning" required placeholder="chăm chỉ" />
+        <label>Mức năng lượng (1-5)
+          <input id="energy-score" type="number" min="1" max="5" required>
         </label>
-        <label>Ví dụ
-          <input id="example" placeholder="She is a diligent student." />
+        <label>Tự chấm hiệu quả học (0-100)
+          <input id="effectiveness" type="number" min="0" max="100" required>
         </label>
-        <button type="submit">Lưu từ</button>
+        <button type="submit">Lưu đánh giá</button>
       </form>
-    </section>
-
-    <section class="card">
-      <h2>Flashcards</h2>
-      <div id="flashcard" class="flashcard">
-        <p id="flash-word">Chưa có dữ liệu</p>
-        <small id="flash-meaning"></small>
-      </div>
-      <div class="row">
-        <button id="toggle-answer">Hiện nghĩa</button>
-        <button id="next-card">Thẻ tiếp theo</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Quiz nhanh</h2>
-      <p id="quiz-question">Thêm ít nhất 2 từ để bắt đầu quiz.</p>
-      <div id="quiz-options" class="options"></div>
-      <p id="quiz-result"></p>
-      <div class="row">
-        <button id="new-quiz">Câu mới</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Tiến độ</h2>
-      <p>Tổng từ đã lưu: <strong id="total-words">0</strong></p>
-      <p>Số câu đúng quiz: <strong id="correct-count">0</strong></p>
-      <p>Số câu đã làm: <strong id="attempt-count">0</strong></p>
-      <button id="reset-data" class="danger">Xóa toàn bộ dữ liệu</button>
+      <p id="coach-feedback" class="feedback"></p>
     </section>
 
     <section class="card full">
-      <h2>Danh sách từ vựng</h2>
-      <ul id="vocab-list"></ul>
+      <h2>Điểm yếu người Việt cần drill mỗi ngày</h2>
+      <ul>
+        <li><strong>Articles:</strong> a / an / the / zero article</li>
+        <li><strong>Prepositions:</strong> in / on / at / for / to</li>
+        <li><strong>Tenses:</strong> thì hiện tại - quá khứ - hiện tại hoàn thành</li>
+      </ul>
+      <p>Gợi ý: mỗi ngày dành 5-10 phút sửa lỗi cũ sẽ hiệu quả hơn học thật nhiều kiến thức mới.</p>
     </section>
   </main>
 
