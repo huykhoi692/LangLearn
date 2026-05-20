@@ -27,7 +27,15 @@ const el = {
   checkSpeaking: document.getElementById('check-speaking'),
   checkWriting: document.getElementById('check-writing'),
   speakingFeedback: document.getElementById('speaking-feedback'),
-  writingFeedback: document.getElementById('writing-feedback')
+  writingFeedback: document.getElementById('writing-feedback'),
+  vocabFlashNext: document.getElementById('vocab-flash-next'),
+  vocabFlashToggle: document.getElementById('vocab-flash-toggle'),
+  vocabFlashcard: document.getElementById('vocab-flashcard'),
+  vocabPractice: document.getElementById('vocab-practice'),
+  vocabPracticeResult: document.getElementById('vocab-practice-result'),
+  grammarPractice: document.getElementById('grammar-practice'),
+  checkGrammar: document.getElementById('check-grammar'),
+  grammarResult: document.getElementById('grammar-result')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -175,6 +183,8 @@ if (el.generatePlan) el.generatePlan.addEventListener('click', async () => {
     renderPlan(plan);
     renderChecklist();
     renderStats();
+    renderVocabTools();
+    renderGrammarTools();
     el.genStatus.textContent = 'Đã sinh dữ liệu thành công ✅';
   } catch (e) {
     el.genStatus.textContent = `Lỗi sinh dữ liệu: ${e.message}`;
@@ -191,6 +201,75 @@ el.checkWriting.addEventListener('click', () => {
   checkAnswer('Writing', q, el.writingAnswer.value, el.writingFeedback);
 });
 
+
+
+let currentFlashIndex = -1;
+let flashShowMeaning = false;
+
+function renderVocabTools() {
+  const vocab = state.days[dateKey].plan?.vocabulary || [];
+  if (!vocab.length) {
+    el.vocabFlashcard.textContent = 'Hãy sinh kế hoạch trước để có từ vựng.';
+    el.vocabPractice.innerHTML = '';
+    return;
+  }
+  const target = vocab[Math.floor(Math.random() * vocab.length)];
+  const options = [target.meaning];
+  while (options.length < Math.min(4, vocab.length)) {
+    const candidate = vocab[Math.floor(Math.random() * vocab.length)].meaning;
+    if (!options.includes(candidate)) options.push(candidate);
+  }
+  options.sort(() => Math.random() - 0.5);
+  el.vocabPractice.innerHTML = `<p><strong>Chọn nghĩa đúng của từ:</strong> ${sanitize(target.word)}</p><div class="options">${options.map(o => `<button class="option" data-correct="${o === target.meaning}">${sanitize(o)}</button>`).join('')}</div>`;
+  el.vocabPracticeResult.textContent = '';
+  el.vocabPractice.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    el.vocabPracticeResult.textContent = btn.dataset.correct === 'true' ? `✅ Chính xác! Ví dụ: ${sanitize(target.example)}` : `❌ Chưa đúng. Đáp án: ${sanitize(target.meaning)}`;
+  }));
+}
+
+function nextFlashcard() {
+  const vocab = state.days[dateKey].plan?.vocabulary || [];
+  if (!vocab.length) {
+    el.vocabFlashcard.textContent = 'Hãy sinh kế hoạch trước để có từ vựng.';
+    return;
+  }
+  currentFlashIndex = (currentFlashIndex + 1) % vocab.length;
+  flashShowMeaning = false;
+  el.vocabFlashcard.textContent = sanitize(vocab[currentFlashIndex].word);
+}
+
+function toggleFlashMeaning() {
+  const vocab = state.days[dateKey].plan?.vocabulary || [];
+  if (currentFlashIndex < 0 || !vocab.length) return;
+  flashShowMeaning = !flashShowMeaning;
+  const w = vocab[currentFlashIndex];
+  el.vocabFlashcard.textContent = flashShowMeaning ? `${sanitize(w.word)} — ${sanitize(w.meaning)} | ${sanitize(w.example)}` : sanitize(w.word);
+}
+
+function renderGrammarTools() {
+  const grammar = state.days[dateKey].plan?.grammar || [];
+  if (!grammar.length) {
+    el.grammarPractice.innerHTML = '<p class="muted">Hãy sinh kế hoạch trước để có bài grammar.</p>';
+    return;
+  }
+  el.grammarPractice.innerHTML = grammar.map((g, i) => `<div class="vocab-item"><strong>${i + 1}. ${sanitize(g.point)}</strong><span>${sanitize(g.exercise)}</span><input data-i="${i}" class="grammar-input" placeholder="Nhập đáp án của bạn" /></div>`).join('');
+  el.grammarResult.textContent = '';
+}
+
+function checkGrammarAnswers() {
+  const grammar = state.days[dateKey].plan?.grammar || [];
+  const inputs = [...document.querySelectorAll('.grammar-input')];
+  if (!grammar.length || !inputs.length) return;
+  let correct = 0;
+  inputs.forEach(inp => {
+    const i = Number(inp.dataset.i);
+    const user = (inp.value || '').trim().toLowerCase();
+    const ans = String(grammar[i]?.answer || '').trim().toLowerCase();
+    if (user && ans && user === ans) correct += 1;
+  });
+  el.grammarResult.textContent = `Bạn đúng ${correct}/${grammar.length} câu. Gợi ý: xem lại phần đáp án ở box Grammar drills.`;
+}
+
 function init() {
   if (window.location.protocol === 'file:') {
     el.genStatus.textContent = 'Bạn đang mở bằng file:// nên có thể gặp lỗi bảo mật khi gọi API. Hãy chạy: python3 -m http.server 8000 rồi mở http://localhost:8000';
@@ -200,6 +279,8 @@ function init() {
   if (state.days[dateKey].plan) renderPlan(state.days[dateKey].plan);
   renderChecklist();
   renderStats();
+  renderVocabTools();
+  renderGrammarTools();
 }
 
 init();
@@ -214,3 +295,8 @@ el.testApi?.addEventListener('click', async () => {
     el.apiStatus.textContent = `Test thất bại: ${e.message}`;
   }
 });
+
+
+el.vocabFlashNext?.addEventListener('click', nextFlashcard);
+el.vocabFlashToggle?.addEventListener('click', toggleFlashMeaning);
+el.checkGrammar?.addEventListener('click', checkGrammarAnswers);

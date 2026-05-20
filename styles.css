@@ -22,3 +22,6 @@ button.ghost { background:#2a3758; }
 .vocab-list { display:grid; gap:.5rem; }
 .vocab-item { background:#10192a; border:1px solid #2a3758; border-radius:10px; padding:.6rem .7rem; display:grid; gap:.2rem; }
 .feedback { color:#a8f7c7; min-height:1.2rem; }
+
+.flashcard{margin-top:.7rem;background:#10192a;border:1px solid #2a3758;border-radius:10px;padding:1rem;min-height:76px;display:flex;align-items:center;justify-content:center;text-align:center;}
+.grammar-practice{display:grid;gap:.5rem;margin-top:.6rem;}
