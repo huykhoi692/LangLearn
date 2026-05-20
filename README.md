@@ -1,22 +1,20 @@
 # LangLearn
 
-Ứng dụng web hỗ trợ học IELTS/TOEIC theo lộ trình 3 giai đoạn (dựa trên lịch thực tế bận đi làm).
+App học IELTS/TOEIC có AI sinh dữ liệu học **đủ 1 ngày** cho:
+- Reading (bài đọc + câu hỏi)
+- Listening (link YouTube gợi ý)
+- Speaking (câu hỏi + AI chấm)
+- Writing (đề bài + AI chấm)
+- Vocabulary (12 từ/ngày)
+- Grammar (8 bài/ngày)
 
-## Tính năng chính
-
-- Theo dõi tiến độ học: % hôm nay, streak, tổng giờ học tuần, số ngày hoàn thành.
-- Checklist task hằng ngày theo từng giai đoạn.
-- Ghi chú + tự đánh giá cuối ngày kèm feedback gợi ý cho ngày sau.
-- **Công cụ từ vựng sinh theo ngày**:
-  - Tự sinh bộ 5 từ/ngày (kèm nghĩa + ví dụ + topic).
-  - Bài tập trắc nghiệm nghĩa từ ngay trong app.
+## Điểm chính
+- Có ô nhập API key để thay key khi hết quota.
+- Có ô nhập model để dùng model rẻ hơn (mặc định: `gemini-1.5-flash-8b`).
+- Lưu local bằng `localStorage`.
 
 ## Chạy dự án
-
-Mở trực tiếp `index.html` bằng trình duyệt, hoặc chạy server tĩnh:
-
 ```bash
 python3 -m http.server 8000
 ```
-
-Sau đó truy cập `http://localhost:8000`.
+Mở `http://localhost:8000`.
