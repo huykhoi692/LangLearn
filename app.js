@@ -33,6 +33,8 @@ const el = {
   vocabFlashcard: document.getElementById('vocab-flashcard'),
   vocabPractice: document.getElementById('vocab-practice'),
   vocabPracticeResult: document.getElementById('vocab-practice-result'),
+  vocabQuizNext: document.getElementById('vocab-quiz-next'),
+  vocabQuizScore: document.getElementById('vocab-quiz-score'),
   grammarPractice: document.getElementById('grammar-practice'),
   checkGrammar: document.getElementById('check-grammar'),
   grammarResult: document.getElementById('grammar-result')
@@ -205,14 +207,23 @@ el.checkWriting.addEventListener('click', () => {
 
 let currentFlashIndex = -1;
 let flashShowMeaning = false;
+let vocabQuizState = { total: 0, correct: 0 };
 
 function renderVocabTools() {
   const vocab = state.days[dateKey].plan?.vocabulary || [];
   if (!vocab.length) {
     el.vocabFlashcard.textContent = 'Hãy sinh kế hoạch trước để có từ vựng.';
     el.vocabPractice.innerHTML = '';
+    el.vocabQuizScore.textContent = '';
     return;
   }
+  el.vocabQuizScore.textContent = `Điểm quiz: ${vocabQuizState.correct}/${vocabQuizState.total}`;
+  renderOneVocabQuestion();
+}
+
+function renderOneVocabQuestion() {
+  const vocab = state.days[dateKey].plan?.vocabulary || [];
+  if (!vocab.length) return;
   const target = vocab[Math.floor(Math.random() * vocab.length)];
   const options = [target.meaning];
   while (options.length < Math.min(4, vocab.length)) {
@@ -220,10 +231,21 @@ function renderVocabTools() {
     if (!options.includes(candidate)) options.push(candidate);
   }
   options.sort(() => Math.random() - 0.5);
+
   el.vocabPractice.innerHTML = `<p><strong>Chọn nghĩa đúng của từ:</strong> ${sanitize(target.word)}</p><div class="options">${options.map(o => `<button class="option" data-correct="${o === target.meaning}">${sanitize(o)}</button>`).join('')}</div>`;
   el.vocabPracticeResult.textContent = '';
-  el.vocabPractice.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
-    el.vocabPracticeResult.textContent = btn.dataset.correct === 'true' ? `✅ Chính xác! Ví dụ: ${sanitize(target.example)}` : `❌ Chưa đúng. Đáp án: ${sanitize(target.meaning)}`;
+
+  const buttons = [...el.vocabPractice.querySelectorAll('button')];
+  buttons.forEach(btn => btn.addEventListener('click', () => {
+    if (buttons.some(b => b.disabled)) return;
+    buttons.forEach(b => b.disabled = true);
+    vocabQuizState.total += 1;
+    const isCorrect = btn.dataset.correct === 'true';
+    if (isCorrect) vocabQuizState.correct += 1;
+    el.vocabQuizScore.textContent = `Điểm quiz: ${vocabQuizState.correct}/${vocabQuizState.total}`;
+    el.vocabPracticeResult.textContent = isCorrect
+      ? `✅ Chính xác! Ví dụ: ${sanitize(target.example)}`
+      : `❌ Chưa đúng. Đáp án: ${sanitize(target.meaning)}`;
   }));
 }
 
@@ -300,3 +322,5 @@ el.testApi?.addEventListener('click', async () => {
 el.vocabFlashNext?.addEventListener('click', nextFlashcard);
 el.vocabFlashToggle?.addEventListener('click', toggleFlashMeaning);
 el.checkGrammar?.addEventListener('click', checkGrammarAnswers);
+
+el.vocabQuizNext?.addEventListener('click', renderOneVocabQuestion);
