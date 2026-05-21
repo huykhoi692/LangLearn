@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { setupPage, basePlan } from './helpers';
+import { setupPage, basePlan, localDateKey } from './helpers';
 
 test('Flow Reading -> chấm -> đánh dấu hoàn thành -> next task Listening', async ({ page }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
   const plan = basePlan();
   plan.checklist = [
     { label: 'Reading hôm nay', duration: 20 },

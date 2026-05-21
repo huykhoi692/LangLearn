@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { KEY, setupPage, basePlan } from './helpers';
+import { KEY, setupPage, basePlan, localDateKey } from './helpers';
 
 test('Reading chỉ hiển thị ở tab Luyện tập khi skill Reading active', async ({ page }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
   const plan = basePlan();
   plan.checklist = [{ label: 'Reading hôm nay', duration: 20 }, { label: 'Listening hôm nay', duration: 20 }];
 

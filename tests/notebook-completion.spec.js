@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { setupPage, basePlan } from './helpers';
+import { setupPage, basePlan, localDateKey } from './helpers';
 
 test('Sổ tay: nút hoàn thành tick đúng task từ vựng/ngữ pháp', async ({ page }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
   const plan = basePlan();
   plan.checklist = [
     { label: 'Từ vựng hôm nay', duration: 15 },
