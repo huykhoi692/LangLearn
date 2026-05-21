@@ -665,7 +665,7 @@ function showReadingNotePopover(word, x, y) {
     <label>Từ/cụm từ<input id="reading-note-word" value="${sanitize(word)}" /></label>
     <label>Nghĩa<input id="reading-note-meaning" placeholder="Nhập nghĩa tiếng Việt" /></label>
     <label>Ví dụ<input id="reading-note-example" placeholder="Ví dụ ngắn (tuỳ chọn)" /></label>
-    <div class="row"><button id="reading-note-confirm" class="ghost" type="button">Lưu note</button></div><small class="muted">Bạn có thể bấm nút Lưu note hoặc click ra ngoài để lưu.</small>
+    <div class="row"><button id="reading-note-confirm" class="ghost" type="button">Lưu note</button></div><small class="muted">Bạn có thể bấm nút Lưu note. Click ra ngoài để đóng popover.</small>
   `, x, y);
   document.getElementById('reading-note-confirm')?.addEventListener('click', () => {
     const result = saveReadingDraftNote();
@@ -689,7 +689,7 @@ async function translateSelectedReadingText() {
   const rect = range.getBoundingClientRect();
   lastReadingSelectionText = text;
   showReadingNotePopover(text, rect.right, rect.bottom);
-  setReadingTranslateStatus('Đang note từ/cụm từ. Click ra ngoài để lưu.');
+  setReadingTranslateStatus('Đang note từ/cụm từ. Click ra ngoài để đóng popover.');
 }
 
 function toggleReadingTranslate() {
