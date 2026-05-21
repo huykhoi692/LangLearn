@@ -1,5 +1,11 @@
 const KEY = 'langlearn_ai_daily_v4';
-const dateKey = new Date().toISOString().slice(0, 10);
+function getLocalDateKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+const dateKey = getLocalDateKey();
 
 const SUPABASE_URL = 'https://iuqnocgdycsqyghmlgqm.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1cW5vY2dkeWNzcXlnaG1sZ3FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNTY5MzgsImV4cCI6MjA5NDgzMjkzOH0.0_qLuj2STM7besYdmo05I2m12xwRbhKievZNEX5T0FM';
@@ -92,7 +98,15 @@ function save() {
   localStorage.setItem(KEY, JSON.stringify(state));
 }
 
-function sanitize(text = '') { return String(text).replace(/[<>]/g, ''); }
+function escapeHTML(value = '') {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+function sanitize(text = '') { return escapeHTML(text); }
 
 const PHASE_CONFIG = {
   phase1: { label: 'Giai đoạn 1', levelBias: 'B1', focus: 'Nền tảng từ vựng + grammar cơ bản + reading ngắn' },
@@ -226,7 +240,7 @@ function renderPlan(plan) {
   const directUrl = (plan.listening.youtubeUrl || '').trim();
   const query = encodeURIComponent(plan.listening.youtubeQuery || 'english listening practice');
   const link = directUrl || `https://www.youtube.com/results?search_query=${query}`;
-  el.listeningBox.innerHTML = `<p><strong>${sanitize(plan.listening.title)}</strong></p><p>${sanitize(plan.listening.task)}</p><a target="_blank" href="${sanitize(link)}">Mở bài nghe</a>`;
+  el.listeningBox.innerHTML = `<p><strong>${sanitize(plan.listening.title)}</strong></p><p>${sanitize(plan.listening.task)}</p><a target="_blank" href="${sanitize(link)}">Mở bài nghe</a><div class="row"><button class="ghost mark-skill-done" data-skill="listening">Đánh dấu Listening hoàn thành</button></div>`;
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.vocabBox.innerHTML = plan.vocabulary.map(v => `<div class="vocab-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>${sanitize(v.example)}</small></div>`).join('');
@@ -246,6 +260,34 @@ function ensureDailyTasks(day) {
   if (!checklist.length) return;
   day.tasks = checklist.map(t => ({ label: String(t.label || '').trim() || 'Task', duration: Number(t.duration || 15), done: false }));
 }
+function iconForTask(label='') { const l=label.toLowerCase(); if(l.includes('read')) return '📖'; if(l.includes('listen')) return '🎧'; if(l.includes('speak')) return '🗣️'; if(l.includes('writ')) return '✍️'; if(l.includes('vocab')||l.includes('từ')) return '🧠'; if(l.includes('grammar')||l.includes('ngữ')) return '🧩'; return '✅'; }
+function getTaskDestination(label = '') {
+  const l = String(label).toLowerCase();
+  if (l.includes('read')) return { tab: 'practice', skill: 'reading' };
+  if (l.includes('listen')) return { tab: 'practice', skill: 'listening' };
+  if (l.includes('speak')) return { tab: 'practice', skill: 'speaking' };
+  if (l.includes('writ')) return { tab: 'practice', skill: 'writing' };
+  if (l.includes('vocab') || l.includes('từ')) return { tab: 'notebook', skill: null };
+  if (l.includes('grammar') || l.includes('ngữ')) return { tab: 'notebook', skill: null };
+  return { tab: 'today', skill: null };
+}
+function getFirstPendingTask() { return (state.days[dateKey]?.tasks || []).find(t => !t.done) || null; }
+function markTaskCompletedBySkill(skill) {
+  const day = state.days[dateKey];
+  if (!day?.tasks?.length) return;
+  const idx = day.tasks.findIndex(t => {
+    const d = getTaskDestination(t.label || '');
+    return d.tab === 'practice' && d.skill === skill;
+  });
+  if (idx < 0) return;
+  day.tasks[idx].done = true;
+  save();
+  upsertDayToSupabase(dateKey, day).catch(() => {});
+  renderChecklist();
+  renderTodaySummary();
+  renderStats();
+  updatePracticeSkillDoneState();
+}
 
 function renderChecklist() {
   const day = state.days[dateKey];
@@ -255,10 +297,9 @@ function renderChecklist() {
     el.checklist.innerHTML = '<p class="muted empty-state">Chưa có task hôm nay. Vào tab "Hôm nay" và bấm "Tạo kế hoạch hôm nay".</p>';
     return;
   }
-  const iconForTask = (label='') => { const l=label.toLowerCase(); if(l.includes('read')) return '📖'; if(l.includes('listen')) return '🎧'; if(l.includes('speak')) return '🗣️'; if(l.includes('writ')) return '✍️'; if(l.includes('vocab')||l.includes('từ')) return '🧠'; if(l.includes('grammar')||l.includes('ngữ')) return '🧩'; return '✅'; };
-  el.checklist.innerHTML = day.tasks.map((t, i) => `<label class="task-item"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span class="check-item-label"><span>${iconForTask(String(t.label||''))}</span><span>${sanitize(t.label)}</span></span><small>${t.duration} phút</small></label>`).join('');
+  el.checklist.innerHTML = day.tasks.map((t, i) => `<label class="task-item ${t.done ? 'completed' : ''}"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span class="check-item-label"><span>${iconForTask(String(t.label||''))}</span><span>${sanitize(t.label)}${t.done ? ' ✓' : ''}</span></span><small>${t.duration} phút</small></label>`).join('');
   el.checklist.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
-    const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderTodaySummary(); renderStats();
+    const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderChecklist(); renderTodaySummary(); renderStats(); updatePracticeSkillDoneState();
   }));
 }
 
@@ -269,17 +310,22 @@ function renderTodaySummary() {
   const next = (day.tasks || []).find(t => !t.done);
   const elNext = document.getElementById('next-task');
   if (!elNext) return;
-  if (!next) {
-    elNext.textContent = day.tasks?.length ? '🎉 Bạn đã hoàn thành toàn bộ nhiệm vụ hôm nay.' : 'Chưa có kế hoạch cho hôm nay.';
+  if (!day.tasks?.length) {
+    elNext.textContent = 'Chưa có kế hoạch cho hôm nay. Hãy tạo kế hoạch để bắt đầu học.';
     elNext.classList.add('empty-state');
     elNext.classList.remove('next-task-card');
     return;
   }
-  const iconForTask = (label='') => { const l=label.toLowerCase(); if(l.includes('read')) return '📖'; if(l.includes('listen')) return '🎧'; if(l.includes('speak')) return '🗣️'; if(l.includes('writ')) return '✍️'; if(l.includes('vocab')||l.includes('từ')) return '🧠'; if(l.includes('grammar')||l.includes('ngữ')) return '🧩'; return '🚀'; };
+  if (!next) {
+    elNext.textContent = '🎉 Bạn đã hoàn thành toàn bộ nhiệm vụ hôm nay.';
+    elNext.classList.add('empty-state');
+    elNext.classList.remove('next-task-card');
+    return;
+  }
   elNext.classList.remove('empty-state');
   elNext.classList.add('next-task-card');
-  elNext.innerHTML = `<div class="next-task-main"><span class="task-icon">${iconForTask(String(next.label||''))}</span><div><strong>${sanitize(next.label)}</strong><div class="task-meta"><span class="note-badge pending">${next.duration} phút</span></div></div></div><button class="ghost" data-tab-jump="practice">Bắt đầu</button>`;
-  elNext.querySelector('[data-tab-jump]')?.addEventListener('click', () => { document.querySelector('.tab-btn[data-tab="practice"]')?.click(); });
+  elNext.innerHTML = `<div class="next-task-main"><span class="task-icon">${iconForTask(String(next.label||''))}</span><div><strong>${sanitize(next.label)}</strong><div class="task-meta"><span class="note-badge pending">${next.duration} phút</span></div></div></div><button class="ghost" id="next-task-start">Bắt đầu</button>`;
+  document.getElementById('next-task-start')?.addEventListener('click', () => startTask(next.label));
 }
 
 async function renderStatsCloudFirst() {
@@ -600,7 +646,7 @@ function checkReadingAnswers() {
     if (ok) correct += 1;
     details.push(`C${idx+1}: ${ok ? '✓' : `✗ (${answers[idx] || 'N/A'})`}`);
   });
-  el.readingFeedback.textContent = `Reading: ${correct}/${answers.length}. ${details.join(' | ')}`;
+  el.readingFeedback.innerHTML = `Reading: ${correct}/${answers.length}. ${sanitize(details.join(' | '))}<br><button class="ghost mark-skill-done" data-skill="reading">Đánh dấu hoàn thành</button>`;
 }
 
 async function checkAnswer(skill, question, answer, outEl) {
@@ -608,7 +654,7 @@ async function checkAnswer(skill, question, answer, outEl) {
   outEl.textContent = 'Đang chấm bằng AI...';
   try {
     const result = await callGemini(`Bạn là giám khảo ${skill}. Câu hỏi: ${question}. Câu trả lời của học viên: ${answer}. Trả JSON: {"score":0-10,"feedback":"","fix":""}`);
-    outEl.textContent = `Điểm: ${result.score}/10 | Nhận xét: ${result.feedback} | Sửa nhanh: ${result.fix}`;
+    outEl.innerHTML = `Điểm: ${sanitize(result.score)}/10 | Nhận xét: ${sanitize(result.feedback)} | Sửa nhanh: ${sanitize(result.fix)}<br><span>Đã xong phần này?</span> <button class="ghost mark-skill-done" data-skill="${sanitize(skill.toLowerCase())}">Đánh dấu hoàn thành</button>`;
   } catch (e) {
     outEl.textContent = `Không chấm được: ${e.message}`;
   }
@@ -670,18 +716,28 @@ let vocabQuizPool = [];
 let currentQuizTarget = null;
 let dbLoadedVocab = [];
 let dbLoadedGrammar = [];
+function getTodayVocab() {
+  const fromDb = dbLoadedVocab.filter(v => v.word && v.meaning);
+  if (fromDb.length) return fromDb;
+  return (state.days[dateKey]?.plan?.vocabulary || []).filter(v => v.word && v.meaning);
+}
+function getTodayGrammar() {
+  const fromDb = dbLoadedGrammar.filter(g => g.point && g.exercise && g.answer);
+  if (fromDb.length) return fromDb;
+  return (state.days[dateKey]?.plan?.grammar || []).filter(g => g.point && g.exercise && g.answer);
+}
 
 function startVocabQuizRound() {
-  const vocab = dbLoadedVocab.filter(v => v.word && v.meaning);
+  const vocab = getTodayVocab();
   vocabQuizPool = vocab.map(v => ({ ...v, key: normalizeReadingText(v.word) + '|' + normalizeReadingText(v.meaning) }));
   vocabQuizState = { total: 0, correct: 0, mastered: 0 };
   currentQuizTarget = null;
 }
 
 function renderVocabTools() {
-  const vocab = dbLoadedVocab.filter(v => v.word && v.meaning);
+  const vocab = getTodayVocab();
   if (!vocab.length) {
-    el.vocabFlashcard.textContent = 'Chưa có vocab từ DB hôm nay. Hãy generate rồi sync lại.';
+    el.vocabFlashcard.textContent = 'Chưa có từ vựng hôm nay. Hãy tạo kế hoạch trước.';
     el.vocabPractice.innerHTML = '';
     el.vocabQuizScore.textContent = '';
     return;
@@ -709,7 +765,7 @@ function markUnknownTarget(target) {
 }
 
 function renderOneVocabQuestion() {
-  const vocab = dbLoadedVocab.filter(v => v.word && v.meaning);
+  const vocab = getTodayVocab();
   if (vocab.length < 4) {
     el.vocabPractice.innerHTML = '<p class="muted">Cần ít nhất 4 từ vựng để làm quiz trắc nghiệm.</p>';
     el.vocabPracticeResult.textContent = '';
@@ -755,9 +811,9 @@ function renderOneVocabQuestion() {
 }
 
 function nextFlashcard() {
-  const vocab = dbLoadedVocab;
+  const vocab = getTodayVocab();
   if (!vocab.length) {
-    el.vocabFlashcard.textContent = 'Chưa có vocab từ DB hôm nay. Hãy generate rồi sync lại.';
+    el.vocabFlashcard.textContent = 'Chưa có từ vựng hôm nay. Hãy tạo kế hoạch trước.';
     return;
   }
   currentFlashIndex = (currentFlashIndex + 1) % vocab.length;
@@ -766,7 +822,7 @@ function nextFlashcard() {
 }
 
 function toggleFlashMeaning() {
-  const vocab = dbLoadedVocab;
+  const vocab = getTodayVocab();
   if (currentFlashIndex < 0 || !vocab.length) return;
   flashShowMeaning = !flashShowMeaning;
   const w = vocab[currentFlashIndex];
@@ -774,9 +830,9 @@ function toggleFlashMeaning() {
 }
 
 function renderGrammarTools() {
-  const grammar = dbLoadedGrammar;
+  const grammar = getTodayGrammar();
   if (!grammar.length) {
-    el.grammarPractice.innerHTML = '<p class="muted">Chưa có grammar từ DB hôm nay. Hãy generate rồi sync lại.</p>';
+    el.grammarPractice.innerHTML = '<p class="muted">Chưa có bài ngữ pháp hôm nay. Hãy tạo kế hoạch trước.</p>';
     return;
   }
   el.grammarPractice.innerHTML = grammar.map((g, i) => `<div class="vocab-item"><strong>${i + 1}. ${sanitize(g.point)}</strong><span>${sanitize(g.exercise)}</span><input data-i="${i}" class="grammar-input" placeholder="Nhập đáp án của bạn" /></div>`).join('');
@@ -784,7 +840,7 @@ function renderGrammarTools() {
 }
 
 function checkGrammarAnswers() {
-  const grammar = dbLoadedGrammar;
+  const grammar = getTodayGrammar();
   const inputs = [...document.querySelectorAll('.grammar-input')];
   if (!grammar.length || !inputs.length) return;
   let correct = 0;
@@ -798,16 +854,49 @@ function checkGrammarAnswers() {
 }
 
 
-function setupTabs() {
+function activateTab(name) {
   const buttons = [...document.querySelectorAll('.tab-btn')];
   const panes = [...document.querySelectorAll('.tab-pane')];
-  const activate = (name) => {
-    buttons.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
-    panes.forEach(p => p.classList.toggle('active', p.dataset.tabPane === name));
-  };
-  buttons.forEach(b => b.addEventListener('click', () => activate(b.dataset.tab)));
-  document.querySelectorAll('[data-tab-jump]').forEach(btn => btn.addEventListener('click', () => activate(btn.dataset.tabJump)));
-  activate('today');
+  buttons.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  panes.forEach(p => p.classList.toggle('active', p.dataset.tabPane === name));
+}
+function activatePracticeSkill(skill) {
+  const skillBtns = [...document.querySelectorAll('.skill-btn')];
+  const skillPanes = [...document.querySelectorAll('.practice-skill')];
+  if (!skillBtns.length || !skillPanes.length) return;
+  const valid = ['reading', 'listening', 'speaking', 'writing'].includes(skill) ? skill : 'reading';
+  skillBtns.forEach(b => b.classList.toggle('active', b.dataset.skill === valid));
+  skillPanes.forEach(p => p.classList.toggle('active-skill', p.dataset.skillPane === valid));
+}
+function updatePracticeSkillDoneState() {
+  const tasks = state.days[dateKey]?.tasks || [];
+  const doneMap = { reading: false, listening: false, speaking: false, writing: false };
+  tasks.forEach(t => {
+    const d = getTaskDestination(t.label || '');
+    if (d.tab === 'practice' && d.skill && t.done) doneMap[d.skill] = true;
+  });
+  document.querySelectorAll('.skill-btn').forEach(btn => {
+    const base = btn.dataset.baseLabel || btn.textContent.replace(' ✓', '').trim();
+    btn.dataset.baseLabel = base;
+    const done = doneMap[btn.dataset.skill];
+    btn.textContent = done ? `${base} ✓` : base;
+    btn.classList.toggle('done', !!done);
+  });
+}
+function startTask(label) {
+  const dest = getTaskDestination(label || '');
+  activateTab(dest.tab);
+  if (dest.tab === 'practice' && dest.skill) activatePracticeSkill(dest.skill);
+}
+function setupTabs() {
+  const buttons = [...document.querySelectorAll('.tab-btn')];
+  buttons.forEach(b => b.onclick = () => activateTab(b.dataset.tab));
+  document.querySelectorAll('[data-tab-jump]').forEach(btn => btn.onclick = () => {
+    const first = getFirstPendingTask();
+    if (first) startTask(first.label || '');
+    else activateTab('today');
+  });
+  activateTab('today');
 }
 
 
@@ -816,14 +905,11 @@ function setupPracticeSkills() {
   const skillBtns = [...document.querySelectorAll('.skill-btn')];
   const skillPanes = [...document.querySelectorAll('.practice-skill')];
   if (!skillBtns.length || !skillPanes.length) return;
-  const activateSkill = (skill) => {
-    skillBtns.forEach(b => b.classList.toggle('active', b.dataset.skill === skill));
-    skillPanes.forEach(p => p.classList.toggle('active-skill', p.dataset.skillPane === skill));
-  };
-  const firstPending = (state.days[dateKey]?.tasks || []).find(t => !t.done);
-  const mapSkill = (label='') => { const l=label.toLowerCase(); if(l.includes('listen')) return 'listening'; if(l.includes('speak')) return 'speaking'; if(l.includes('writ')) return 'writing'; return 'reading'; };
-  activateSkill(firstPending ? mapSkill(firstPending.label || '') : 'reading');
-  skillBtns.forEach(b => b.addEventListener('click', () => activateSkill(b.dataset.skill)));
+  const firstPending = getFirstPendingTask();
+  const dest = firstPending ? getTaskDestination(firstPending.label || '') : { skill: 'reading' };
+  activatePracticeSkill(dest.skill || 'reading');
+  updatePracticeSkillDoneState();
+  skillBtns.forEach(b => { b.onclick = () => activatePracticeSkill(b.dataset.skill); });
 }
 function init() {
   if (window.location.protocol === 'file:') {
@@ -843,6 +929,11 @@ function init() {
   renderGrammarTools();
   setupTabs();
   setupPracticeSkills();
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mark-skill-done');
+    if (!btn) return;
+    markTaskCompletedBySkill(btn.dataset.skill);
+  });
 }
 
 async function bootstrap() {
@@ -876,10 +967,11 @@ el.checkGrammar?.addEventListener('click', checkGrammarAnswers);
 el.vocabQuizNext?.addEventListener('click', () => { startVocabQuizRound(); renderVocabTools(); });
 el.vocabQuizUnknown?.addEventListener('click', () => {
   if (!currentQuizTarget) return;
+  const totalVocab = getTodayVocab().length;
   vocabQuizState.total += 1;
   markUnknownTarget(currentQuizTarget);
   el.vocabPracticeResult.textContent = 'Đã đánh dấu CHƯA BIẾT. Từ này sẽ lặp lại ở lượt sau.';
-  el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${dbLoadedVocab.filter(v => v.word && v.meaning).length} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
+  el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${totalVocab} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
   setTimeout(renderOneVocabQuestion, 300);
 });
 
