@@ -655,6 +655,7 @@ function saveReadingWord() {
     showToast('Đã lưu từ vào notebook');
   }
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = result.msg;
+  if (result.ok) showToast('Đã lưu từ Reading');
 }
 
 function renderStats() {
@@ -1080,6 +1081,7 @@ function init() {
   renderTodaySummary();
   renderPlanStatusBadge();
   renderStatsCloudFirst();
+  renderPlanStatusBadge();
   renderPhaseNote();
   renderReadingNotebook();
   renderVocabTools();
@@ -1415,3 +1417,4 @@ el.readingUncheckAll?.addEventListener('click', () => {
 
 
 el.checkReading?.addEventListener('click', checkReadingAnswers);
+
