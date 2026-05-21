@@ -82,7 +82,11 @@ const el = {
   planPhaseSummary: document.getElementById('plan-phase-summary'),
   planStatusBadge: document.getElementById('plan-status-badge'),
   reviewTodayCard: document.getElementById('review-today-card'),
-  coachMessage: document.getElementById('coach-message')
+  coachMessage: document.getElementById('coach-message'),
+  heroProgressRing: document.getElementById('hero-progress-ring'),
+  heroProgressFraction: document.getElementById('hero-progress-fraction'),
+  heroProgressPercent: document.getElementById('hero-progress-percent'),
+  heroPhase: document.getElementById('hero-phase')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -303,7 +307,7 @@ function renderPlan(plan) {
   </div><textarea id="listening-note" rows="4" placeholder="Ghi chú Listening hôm nay...">${sanitize(lState.note || '')}</textarea><div class="row"><button class="ghost" id="save-listening-note">Lưu ghi chú</button><button class="ghost mark-skill-done" data-skill="listening">Đánh dấu Listening hoàn thành</button></div></div>`;
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
-  el.vocabBox.innerHTML = plan.vocabulary.map(v => `<div class="vocab-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>${sanitize(v.example)}</small></div>`).join('');
+  el.vocabBox.innerHTML = plan.vocabulary.map(v => `<article class="vocab-item vocab-deck-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>“${sanitize(v.example)}”</small></article>`).join('');
   el.grammarBox.innerHTML = plan.grammar.map(g => `<div class="vocab-item"><strong>${sanitize(g.point)}</strong><span>Bài tập: ${sanitize(g.exercise)}</span><small>Đáp án: ${sanitize(g.answer)}</small></div>`).join('');
 
   const readingQs = plan.reading.questions || [];
@@ -398,7 +402,8 @@ function renderChecklist() {
   const nextIdx = day.tasks.findIndex(t => !t.done);
   el.checklist.innerHTML = day.tasks.map((t, i) => {
     const cls = t.done ? 'completed' : (i === nextIdx ? 'next' : 'ready');
-    return `<label class="task-item ${cls}"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span class="check-item-label"><span>${iconForTask(String(t.label||''))}</span><span>${sanitize(t.label)}${t.done ? ' ✓' : ''}</span></span><small>${t.duration} phút</small></label>`;
+    const badge = t.done ? 'DONE' : (i === nextIdx ? 'NEXT' : 'READY');
+    return `<label class="task-item ${cls}"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span class="check-item-label"><span class="task-icon-mini">${iconForTask(String(t.label||''))}</span><span>${sanitize(t.label)}</span></span><span class="task-badges"><small class="status-badge ${cls}">${badge}</small><small class="duration-badge">${t.duration} phút</small></span></label>`;
   }).join('');
   el.checklist.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
     const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderChecklist(); renderTodaySummary(); renderStats(); updatePracticeSkillDoneState(); showToast('Đã cập nhật checklist');
@@ -406,10 +411,26 @@ function renderChecklist() {
 }
 
 
+
+function renderHeroProgress(day) {
+  const tasks = day?.tasks || [];
+  const done = tasks.filter(t => t.done).length;
+  const total = tasks.length || 6;
+  const pct = Math.round((done / total) * 100);
+  if (el.heroProgressRing) el.heroProgressRing.style.setProperty('--pct', `${pct}`);
+  if (el.heroProgressFraction) el.heroProgressFraction.textContent = `${done}/${total}`;
+  if (el.heroProgressPercent) el.heroProgressPercent.textContent = `${pct}%`;
+  const phase = PHASE_CONFIG[state.phase]?.label || 'Phase';
+  if (el.heroPhase) el.heroPhase.textContent = `${phase} · ${state.phase}`;
+  const hero = document.querySelector('.today-hero');
+  hero?.classList.toggle('quest-complete', tasks.length>0 && done === tasks.length);
+}
+
 function renderTodaySummary() {
   const day = state.days[dateKey] || {};
   ensureDailyTasks(day);
   renderHeroCta();
+  renderHeroProgress(day);
   const next = (day.tasks || []).find(t => !t.done);
   if (el.coachMessage) el.coachMessage.textContent = getCoachMessage(day);
   const elNext = document.getElementById('next-task');
@@ -907,6 +928,9 @@ function renderOneVocabQuestion() {
     buttons.forEach(b => b.disabled = true);
     vocabQuizState.total += 1;
     const isCorrect = btn.dataset.correct === 'true';
+    buttons.forEach(b => b.classList.add('disabled'));
+    btn.classList.add(isCorrect ? 'is-correct' : 'is-wrong');
+    if (!isCorrect) { const right = buttons.find(b => b.dataset.correct === 'true'); right?.classList.add('is-correct'); }
     if (isCorrect) {
       vocabQuizState.correct += 1;
       removeMasteredTarget(target);
@@ -930,7 +954,8 @@ function nextFlashcard() {
   }
   currentFlashIndex = (currentFlashIndex + 1) % vocab.length;
   flashShowMeaning = false;
-  el.vocabFlashcard.textContent = sanitize(vocab[currentFlashIndex].word);
+  const w=vocab[currentFlashIndex];
+  el.vocabFlashcard.innerHTML = `<div class="flash-face front"><small>Front</small><strong>${sanitize(w.word)}</strong></div>`;
 }
 
 function toggleFlashMeaning() {
@@ -938,7 +963,7 @@ function toggleFlashMeaning() {
   if (currentFlashIndex < 0 || !vocab.length) return;
   flashShowMeaning = !flashShowMeaning;
   const w = vocab[currentFlashIndex];
-  el.vocabFlashcard.textContent = flashShowMeaning ? `${sanitize(w.word)} — ${sanitize(w.meaning)} | ${sanitize(w.example)}` : sanitize(w.word);
+  el.vocabFlashcard.innerHTML = flashShowMeaning ? `<div class="flash-face back"><small>Back</small><strong>${sanitize(w.word)}</strong><p>${sanitize(w.meaning)}</p><em>${sanitize(w.example)}</em></div>` : `<div class="flash-face front"><small>Front</small><strong>${sanitize(w.word)}</strong></div>`;
 }
 
 function renderGrammarTools() {
@@ -947,7 +972,7 @@ function renderGrammarTools() {
     el.grammarPractice.innerHTML = '<p class="muted">Chưa có bài ngữ pháp hôm nay. Hãy tạo kế hoạch trước.</p>';
     return;
   }
-  el.grammarPractice.innerHTML = grammar.map((g, i) => `<div class="vocab-item"><strong>${i + 1}. ${sanitize(g.point)}</strong><span>${sanitize(g.exercise)}</span><input data-i="${i}" class="grammar-input" placeholder="Nhập đáp án của bạn" /></div>`).join('');
+  el.grammarPractice.innerHTML = grammar.map((g, i) => `<article class="vocab-item grammar-drill-item"><strong>${i + 1}. ${sanitize(g.point)}</strong><span class="drill-ex">${sanitize(g.exercise)}</span><input data-i="${i}" class="grammar-input" placeholder="Nhập đáp án của bạn" /><small class="muted">Drill ${i+1}</small></article>`).join('');
   el.grammarResult.textContent = '';
 }
 
@@ -971,8 +996,9 @@ function renderNotebookReviewCard() {
   const vocabCount = getTodayVocab().length;
   const grammarCount = getTodayGrammar().length;
   const total = vocabQuizState.total || 0;
-  const correct = vocabQuizState.correct || 0;
-  el.reviewTodayCard.innerHTML = `<div><span>${vocabCount}</span><small>Từ vựng hôm nay</small></div><div><span>${grammarCount}</span><small>Grammar hôm nay</small></div><div><span>${correct}/${total || 0}</span><small>Tiến độ quiz</small></div>`;
+  const mastered = vocabQuizState.mastered || 0;
+  const still = Math.max(vocabCount - mastered, 0);
+  el.reviewTodayCard.innerHTML = `<div><span>${vocabCount}</span><small>Words today</small></div><div><span>${grammarCount}</span><small>Grammar drills</small></div><div><span>${mastered}</span><small>Mastered</small></div><div><span>${still}</span><small>Still learning</small></div><div><span>${total}</span><small>Quiz attempts</small></div>`;
 }
 
 function activateTab(name) {

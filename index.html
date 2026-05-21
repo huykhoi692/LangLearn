@@ -15,22 +15,34 @@
   <main class="container layout">
     <section class="card tab-shell">
       <div class="tab-bar" id="app-tab-bar">
-        <button class="tab-btn active" data-tab="today">Hôm nay</button>
-        <button class="tab-btn" data-tab="practice">Luyện tập</button>
-        <button class="tab-btn" data-tab="notebook">Sổ tay</button>
-        <button class="tab-btn" data-tab="settings">Cài đặt</button>
+        <button class="tab-btn active" data-tab="today"><span class="tab-icon">🏠</span><span>Hôm nay</span></button>
+        <button class="tab-btn" data-tab="practice"><span class="tab-icon">🎯</span><span>Luyện tập</span></button>
+        <button class="tab-btn" data-tab="notebook"><span class="tab-icon">📒</span><span>Sổ tay</span></button>
+        <button class="tab-btn" data-tab="settings"><span class="tab-icon">⚙️</span><span>Cài đặt</span></button>
       </div>
     </section>
 
     <section class="card tab-pane today-hero" data-tab-pane="today">
-      <p class="eyebrow">Xin chào 👋</p>
-      <h2>Today's English Quest</h2>
-      <p class="muted">AI Coach sẽ gợi ý việc tiếp theo để bạn học đều mỗi ngày, nhẹ quota nhưng rõ tiến bộ.</p>
-      <p id="coach-message" class="coach-line">Coach đang chuẩn bị quest cho bạn.</p>
-      <div id="hero-cta-row" class="cta-row">
-        <button id="generate-plan" class="btn-primary">Tạo kế hoạch hôm nay</button>
+      <div class="today-hero-grid">
+        <div class="hero-main">
+          <p class="eyebrow">Xin chào 👋</p>
+          <h2>Today's English Quest</h2>
+          <p class="muted">AI Coach sẽ gợi ý việc tiếp theo để bạn học đều mỗi ngày, nhẹ quota nhưng rõ tiến bộ.</p>
+          <div class="coach-line"><span class="coach-avatar" aria-hidden="true">🤖</span><p id="coach-message">Coach đang chuẩn bị quest cho bạn.</p></div>
+          <div id="hero-cta-row" class="cta-row">
+            <button id="generate-plan" class="btn-primary">Tạo kế hoạch hôm nay</button>
+          </div>
+          <div class="hero-meta"><span id="plan-status-badge" class="note-badge pending">Chưa có kế hoạch</span><p id="plan-phase-summary" class="muted"></p></div>
+          <p id="gen-status" class="muted status-line"></p>
+        </div>
+        <aside class="hero-progress-panel" aria-label="Tiến độ hôm nay">
+          <div class="progress-ring" id="hero-progress-ring" style="--pct:0"><div class="progress-ring-inner"><strong id="hero-progress-fraction">0/6</strong><span>Quest done</span></div></div>
+          <div class="hero-progress-meta">
+            <p><strong id="hero-progress-percent">0%</strong> hoàn thành</p>
+            <p id="hero-phase">Phase: phase1</p>
+          </div>
+        </aside>
       </div>
-      <div class="hero-meta"><span id="plan-status-badge" class="note-badge pending">Chưa có kế hoạch</span><p id="plan-phase-summary" class="muted"></p></div><p id="gen-status" class="muted status-line"></p>
     </section>
 
     <section class="card stats-row tab-pane" data-tab-pane="today">
@@ -101,15 +113,15 @@
     <section class="card tab-pane" data-tab-pane="notebook">
       <h2>Ôn hôm nay</h2>
       <div id="review-today-card" class="stats-row"></div>
-      <div class="row">
-        <button class="ghost" data-scroll-target="vocab-flashcard">Ôn flashcard</button>
-        <button class="ghost" data-scroll-target="vocab-practice">Làm quiz</button>
-        <button class="ghost" data-scroll-target="grammar-practice">Luyện grammar</button>
+      <div class="row review-cta-row">
+        <button class="ghost" data-scroll-target="vocab-flashcard">Start Flashcard</button>
+        <button class="ghost" data-scroll-target="vocab-practice">Start Quiz</button>
+        <button class="ghost" data-scroll-target="grammar-practice">Start Grammar</button>
       </div>
     </section>
     <section class="card tab-pane" data-tab-pane="notebook"><h2>Vocabulary</h2><div id="vocab-box" class="vocab-list"></div></section>
     <section class="card tab-pane" data-tab-pane="notebook">
-      <h2>Luyện từ vựng</h2><div class="row"><button id="vocab-flash-next">Thẻ tiếp theo</button><button id="vocab-flash-toggle" class="ghost">Hiện nghĩa</button></div>
+      <h2>Luyện từ vựng</h2><div class="row"><button id="vocab-flash-next">Thẻ tiếp theo</button><button id="vocab-flash-toggle" class="ghost">Hiện nghĩa</button><button id="vocab-flash-learning" class="ghost">Đang học</button><button id="vocab-flash-mastered" class="ghost">Đã thuộc</button></div>
       <div id="vocab-flashcard" tabindex="-1" class="flashcard empty-state">Bấm "Thẻ tiếp theo" để bắt đầu.</div>
       <div class="row"><button id="vocab-quiz-next" class="ghost">Bắt đầu/Đổi vòng quiz</button><button id="vocab-quiz-unknown" class="ghost">Chưa biết</button></div>
       <div id="vocab-practice" tabindex="-1" class="vocab-quiz"></div><p id="vocab-practice-result" class="feedback"></p><p id="vocab-quiz-score" class="muted"></p><div class="row"><button class="ghost mark-skill-done" data-skill="vocabulary">Đánh dấu Vocabulary hoàn thành</button></div>
@@ -119,13 +131,13 @@
 
     <section class="card tab-pane" data-tab-pane="settings">
       <h2>Kết nối AI</h2>
-      <div class="api-grid"><label>Gemini API Key<input id="api-key" type="password" placeholder="Dán API key ở đây" /></label><label>Model<input id="model-name" value="gemini-1.5-flash" /></label></div>
+      <div class="api-grid"><label>Gemini API Key<input id="api-key" type="password" placeholder="Dán API key ở đây" /></label><label>Model<select id="model-name"><option value="gemini-1.5-flash">gemini-1.5-flash</option><option value="gemini-1.5-pro">gemini-1.5-pro</option><option value="gemini-2.0-flash">gemini-2.0-flash</option></select></label></div><p class="muted">Gợi ý: nếu model không hỗ trợ endpoint hiện tại, hãy quay về gemini-1.5-flash.</p>
       <div class="row"><button id="save-api">Lưu cấu hình</button><button id="test-api" class="ghost">Test kết nối</button><button id="clear-api" class="ghost">Xóa key</button></div>
       <p id="api-status" class="muted"></p>
     </section>
     <section class="card tab-pane" data-tab-pane="settings">
       <h2>Đồng bộ đám mây</h2>
-      <div class="api-grid"><label>Email<input id="auth-email" value="khois2p@gmail.com" /></label><label>Password<input id="auth-password" type="password" value="123ronaldo" /></label></div>
+      <div class="api-grid"><label>Email<input id="auth-email" type="email" placeholder="you@example.com" /></label><label>Password<input id="auth-password" type="password" placeholder="Nhập mật khẩu" /></label></div>
       <div class="row"><button id="auth-login">Đăng nhập</button><button id="auth-logout" class="ghost">Đăng xuất</button><button id="sync-backfill" class="ghost">Đồng bộ dữ liệu cũ</button></div>
       <p id="auth-status" class="muted"></p><p id="sync-status" class="muted"></p>
     </section>
