@@ -114,3 +114,10 @@ a { color:#9fd4ff; }
   .page-header { padding:1.1rem 0 .8rem; }
   .card { padding:.88rem; }
 }
+
+
+.note-item{position:relative;}
+.note-badge{display:inline-block;width:fit-content;padding:.15rem .5rem;border-radius:999px;font-size:.8rem;border:1px solid #2e4470;}
+.note-badge.pending{color:#ffdca8;border-color:#7a5a2b;background:rgba(122,90,43,.15);}
+.note-badge.ok{color:#9bf4cf;border-color:#2f6a55;background:rgba(38,119,89,.18);}
+#reading-note-actions button{min-width:180px;}

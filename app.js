@@ -64,7 +64,10 @@ const el = {
   readingVocabInput: document.getElementById('reading-vocab-input'),
   readingSaveWord: document.getElementById('reading-save-word'),
   readingWordList: document.getElementById('reading-word-list'),
-  readingNoteStatus: document.getElementById('reading-note-status')
+  readingNoteStatus: document.getElementById('reading-note-status'),
+  readingSaveSelected: document.getElementById('reading-save-selected'),
+  readingUncheckAll: document.getElementById('reading-uncheck-all'),
+  readingNoteSummary: document.getElementById('reading-note-summary')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -351,30 +354,43 @@ function mergeReadingNotes(list = []) {
 }
 
 function renderReadingNotebook() {
-  el.readingWordList.innerHTML = (state.readingNotes || []).map((n, i) => `
-    <li class="vocab-item">
+  const notes = state.readingNotes || [];
+  const selectedCount = notes.filter(n => n.selectedForDb).length;
+  const unsyncedCount = notes.filter(n => !n.selectedForDb).length;
+  if (el.readingNoteSummary) {
+    el.readingNoteSummary.textContent = `Notebook: ${notes.length} từ | Chờ sync DB: ${unsyncedCount} | Đã tick lưu DB: ${selectedCount}`;
+  }
+
+  el.readingWordList.innerHTML = notes.map((n, i) => `
+    <li class="vocab-item note-item ${n.selectedForDb ? 'note-synced' : 'note-local'}">
       <strong>${i + 1}. ${sanitize(n.word || '')}</strong>
       <span>Nghĩa: ${sanitize(n.meaning || '')}</span>
       <small>Ví dụ: ${sanitize(n.example || '')}</small>
+      <small class="note-badge ${n.selectedForDb ? 'ok' : 'pending'}">${n.selectedForDb ? 'Đã chọn lưu DB' : 'Chỉ ở notebook'}</small>
       <label><input type="checkbox" class="note-select-db" data-id="${sanitize(n.id)}" ${n.selectedForDb ? 'checked' : ''}/> Lưu vào DB</label>
       <label><input type="checkbox" class="note-mastered" data-id="${sanitize(n.id)}" ${n.mastered ? 'checked' : ''}/> Đã thuộc</label>
     </li>
   `).join('');
+
   el.readingWordList.querySelectorAll('.note-select-db').forEach(inp => inp.addEventListener('change', async (e) => {
     const id = e.target.dataset.id;
     const note = state.readingNotes.find(x => x.id === id);
     if (!note) return;
     note.selectedForDb = e.target.checked;
     save();
-    await upsertReadingNoteToSupabase(note).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
+    renderReadingNotebook();
+    if (note.selectedForDb) {
+      await upsertReadingNoteToSupabase(note).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
+    }
   }));
+
   el.readingWordList.querySelectorAll('.note-mastered').forEach(inp => inp.addEventListener('change', async (e) => {
     const id = e.target.dataset.id;
     const note = state.readingNotes.find(x => x.id === id);
     if (!note) return;
     note.mastered = e.target.checked;
     save();
-    await upsertReadingNoteToSupabase(note).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
+    if (note.selectedForDb) await upsertReadingNoteToSupabase(note).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
   }));
 }
 
@@ -939,5 +955,23 @@ document.addEventListener('mousedown', (e) => {
   hideReadingTranslateTooltip();
 });
 el.readingSaveWord?.addEventListener('click', saveReadingWord);
+
+el.readingSaveSelected?.addEventListener('click', async () => {
+  const toSync = (state.readingNotes || []).filter(n => n.selectedForDb && n.word && n.meaning);
+  if (!toSync.length) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Chưa có mục nào được tick để lưu DB.'; return; }
+  let ok = 0;
+  for (const note of toSync) {
+    try { await upsertReadingNoteToSupabase(note); ok += 1; } catch (_) {}
+  }
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã xử lý lưu DB ${ok}/${toSync.length} mục được tick.`;
+});
+
+el.readingUncheckAll?.addEventListener('click', () => {
+  (state.readingNotes || []).forEach(n => { n.selectedForDb = false; });
+  save();
+  renderReadingNotebook();
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Đã bỏ tick lưu DB cho tất cả mục.';
+});
+
 
 el.checkReading?.addEventListener('click', checkReadingAnswers);
