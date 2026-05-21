@@ -60,6 +60,7 @@ create table if not exists public.grammar_items (
   user_id uuid not null references auth.users(id) on delete cascade,
   study_date date not null,
   point text not null,
+  theory text,
   exercise text not null,
   answer text not null,
   created_at timestamptz not null default now(),
@@ -86,3 +87,6 @@ drop policy if exists grammar_update_own on public.grammar_items;
 create policy grammar_update_own on public.grammar_items for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists grammar_delete_own on public.grammar_items;
 create policy grammar_delete_own on public.grammar_items for delete using (auth.uid() = user_id);
+
+
+alter table public.grammar_items add column if not exists theory text;
