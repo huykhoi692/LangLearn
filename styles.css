@@ -147,3 +147,8 @@ a{color:#2563eb}
   .tab-btn.active{background:#eff6ff;color:#1d4ed8;border-radius:10px}
   .today-hero-grid{grid-template-columns:1fr}
 }
+
+.reading-report{border:1px solid #bfdbfe;background:#f8fbff;border-radius:12px;padding:.75rem;display:grid;gap:.45rem}
+.report-row{padding:.4rem .55rem;border-radius:10px;background:#fff;border:1px solid #e2e8f0}
+.report-row.is-correct{background:#ecfdf3;border-color:#86efac;color:#166534}
+.report-row.is-wrong{background:#fff7ed;border-color:#fdba74;color:#9a3412}

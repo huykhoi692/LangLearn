@@ -102,6 +102,9 @@ let readingTranslateEnabled = false;
 let readingDraftNote = null;
 let globalEventsBound = false;
 let questCelebratedDate = null;
+let lastReadingSelectionText = "";
+let readingPopoverOpen = false;
+let readingSelectionTimer = null;
 
 function save() {
   const fullState = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -640,7 +643,7 @@ function showReadingTranslateTooltip(html, x, y) {
   el.readingTranslateTooltip.style.top = `${Math.max(pad, Math.min(y + 8, maxY))}px`;
 }
 
-function maybeSaveReadingDraftNote() {
+function saveReadingDraftNote() {
   if (!readingDraftNote) return;
   const wordEl = document.getElementById('reading-note-word');
   const meaningEl = document.getElementById('reading-note-meaning');
@@ -648,12 +651,14 @@ function maybeSaveReadingDraftNote() {
   const word = (wordEl?.value || readingDraftNote.word || '').trim();
   const meaning = (meaningEl?.value || '').trim();
   const example = (exampleEl?.value || '').trim();
-  if (!word || !meaning) return;
+  if (!word || !meaning) return { ok: false, msg: 'Thiếu từ hoặc nghĩa.' };
   const result = createReadingNote(word, meaning, example, 'selection');
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = result.msg;
+  return result;
 }
 
 function showReadingNotePopover(word, x, y) {
+  readingPopoverOpen = true;
   readingDraftNote = { word };
   showReadingTranslateTooltip(`
     <div><strong>Thêm note</strong></div>
@@ -663,8 +668,13 @@ function showReadingNotePopover(word, x, y) {
     <div class="row"><button id="reading-note-confirm" class="ghost" type="button">Lưu note</button></div><small class="muted">Bạn có thể bấm nút Lưu note hoặc click ra ngoài để lưu.</small>
   `, x, y);
   document.getElementById('reading-note-confirm')?.addEventListener('click', () => {
-    maybeSaveReadingDraftNote();
-    hideReadingTranslateTooltip();
+    const result = saveReadingDraftNote();
+    if (result?.ok) {
+      showToast('Đã lưu note Reading');
+      window.getSelection()?.removeAllRanges();
+      hideReadingTranslateTooltip();
+      setReadingTranslateStatus('Đã lưu note Reading.');
+    }
   });
 }
 
@@ -672,10 +682,12 @@ async function translateSelectedReadingText() {
   if (!readingTranslateEnabled) return;
   const selection = window.getSelection();
   const text = (selection?.toString() || '').trim().replace(/\s+/g, ' ');
-  if (!text || text.length < 2) { hideReadingTranslateTooltip(); return; }
+  if (!text || text.length < 2) return;
   if (!el.readingBox.contains(selection.anchorNode) || !el.readingBox.contains(selection.focusNode)) return;
+  if (readingPopoverOpen && text === lastReadingSelectionText) return;
   const range = selection.getRangeAt(0);
   const rect = range.getBoundingClientRect();
+  lastReadingSelectionText = text;
   showReadingNotePopover(text, rect.right, rect.bottom);
   setReadingTranslateStatus('Đang note từ/cụm từ. Click ra ngoài để lưu.');
 }
@@ -771,9 +783,9 @@ function checkReadingAnswers() {
     const ans = String(answers[idx] || '').trim();
     const ok = isReadingAnswerAcceptable(user, ans);
     if (ok) correct += 1;
-    details.push(`C${idx+1}: ${ok ? '✓' : `✗ (${answers[idx] || 'N/A'})`}`);
+    details.push({ idx: idx + 1, ok, answer: ans || 'N/A' });
   });
-  el.readingFeedback.innerHTML = `Reading: ${correct}/${answers.length}. ${sanitize(details.join(' | '))}<br><button class="ghost mark-skill-done" data-skill="reading">Đánh dấu hoàn thành</button>`;
+  el.readingFeedback.innerHTML = `<article class="reading-report"><strong>Reading Report</strong><div class="report-row">Score: ${correct}/${answers.length}</div>${details.map(d => `<div class="report-row ${d.ok ? 'is-correct' : 'is-wrong'}">Câu ${d.idx}: ${d.ok ? 'Đúng' : `Sai · Đáp án gợi ý: ${sanitize(d.answer)}`}</div>`).join('')}<div class="row"><button class="ghost mark-skill-done" data-skill="reading">Đánh dấu hoàn thành</button></div></article>`;
 }
 
 async function checkAnswer(skill, question, answer, outEl) {
@@ -955,7 +967,7 @@ function nextFlashcard() {
   currentFlashIndex = (currentFlashIndex + 1) % vocab.length;
   flashShowMeaning = false;
   const w=vocab[currentFlashIndex];
-  el.vocabFlashcard.innerHTML = `<div class="flash-face front"><small>Front</small><strong>${sanitize(w.word)}</strong></div>`;
+  el.vocabFlashcard.innerHTML = `<div class="flash-face front"><small>Click để lật</small><strong>${sanitize(w.word)}</strong></div>`;
 }
 
 function toggleFlashMeaning() {
@@ -963,7 +975,7 @@ function toggleFlashMeaning() {
   if (currentFlashIndex < 0 || !vocab.length) return;
   flashShowMeaning = !flashShowMeaning;
   const w = vocab[currentFlashIndex];
-  el.vocabFlashcard.innerHTML = flashShowMeaning ? `<div class="flash-face back"><small>Back</small><strong>${sanitize(w.word)}</strong><p>${sanitize(w.meaning)}</p><em>${sanitize(w.example)}</em></div>` : `<div class="flash-face front"><small>Front</small><strong>${sanitize(w.word)}</strong></div>`;
+  el.vocabFlashcard.innerHTML = flashShowMeaning ? `<div class="flash-face back"><small>Click để quay lại</small><strong>${sanitize(w.word)}</strong><p>${sanitize(w.meaning)}</p><em>${sanitize(w.example)}</em></div>` : `<div class="flash-face front"><small>Click để lật</small><strong>${sanitize(w.word)}</strong></div>`;
 }
 
 function renderGrammarTools() {
@@ -1180,6 +1192,7 @@ el.testApi?.addEventListener('click', async () => {
 
 el.vocabFlashNext?.addEventListener('click', nextFlashcard);
 el.vocabFlashToggle?.addEventListener('click', toggleFlashMeaning);
+el.vocabFlashcard?.addEventListener('click', toggleFlashMeaning);
 el.checkGrammar?.addEventListener('click', checkGrammarAnswers);
 
 el.vocabQuizNext?.addEventListener('click', () => { startVocabQuizRound(); renderVocabTools(); });
@@ -1435,13 +1448,16 @@ el.phaseSelect?.addEventListener('change', () => {
 el.readingHighlight?.addEventListener('click', applyReadingKeywordHighlight);
 el.readingHidePassage?.addEventListener('click', toggleReadingPassage);
 el.readingTranslateToggle?.addEventListener('click', toggleReadingTranslate);
-el.readingBox?.addEventListener('mouseup', () => { translateSelectedReadingText().catch(() => {}); });
+el.readingBox?.addEventListener('mouseup', () => {
+  if (readingSelectionTimer) clearTimeout(readingSelectionTimer);
+  readingSelectionTimer = setTimeout(() => { translateSelectedReadingText().catch(() => {}); }, 150);
+});
 document.addEventListener('mousedown', (e) => {
   if (!el.readingTranslateTooltip || el.readingTranslateTooltip.hidden) return;
   if (el.readingTranslateTooltip.contains(e.target)) return;
-  if (el.readingBox.contains(e.target)) return;
-  maybeSaveReadingDraftNote();
+  if (el.readingBox?.contains(e.target)) return;
   hideReadingTranslateTooltip();
+  setReadingTranslateStatus('Đã đóng popover thêm note.');
 });
 el.readingSaveWord?.addEventListener('click', saveReadingWord);
 
