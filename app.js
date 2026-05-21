@@ -185,6 +185,13 @@ Schema:
  "grammar":[{"point":"","exercise":"","answer":""}],
  "checklist":[{"label":"","duration":15}]
 }
+Yêu cầu:
+- vocabulary đúng 12 từ
+- grammar đúng 8 bài
+- reading passage 120-180 words
+- checklist gồm đủ 6 mục ứng với các phần trên.`;
+  return callGemini(prompt);
+}
 
 function getUnmasteredReadingNotes() {
   return (state.readingNotes || []).filter(n => n.selectedForDb && !n.mastered && n.word && n.meaning);
@@ -206,13 +213,6 @@ function applyNotesToVocabulary(plan) {
   });
   plan.vocabulary = merged.slice(0, targetCount);
   return { usedNotes: Math.min(notePool.length, targetCount), needsFill: notePool.length < targetCount };
-}
-Yêu cầu:
-- vocabulary đúng 12 từ
-- grammar đúng 8 bài
-- reading passage 120-180 words
-- checklist gồm đủ 6 mục ứng với các phần trên.`;
-  return callGemini(prompt);
 }
 
 function renderPlan(plan) {
