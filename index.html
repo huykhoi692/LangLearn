@@ -66,11 +66,22 @@
       <p id="phase-note" class="muted"></p>
     </section>
 
-    <section class="card full tab-pane" data-tab-pane="practice">
+
+    <section class="card tab-pane" data-tab-pane="practice">
+      <h2>Luyện tập theo kỹ năng</h2>
+      <div class="skill-switcher" id="practice-skill-switcher">
+        <button class="skill-btn active" data-skill="reading">Reading</button>
+        <button class="skill-btn" data-skill="listening">Listening</button>
+        <button class="skill-btn" data-skill="speaking">Speaking</button>
+        <button class="skill-btn" data-skill="writing">Writing</button>
+      </div>
+    </section>
+
+    <section class="card full tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="reading">
       <h2>Reading</h2><div id="reading-box"></div><div id="reading-qa" class="grammar-practice"></div>
       <div class="row"><button id="check-reading">Chấm Reading</button></div><p id="reading-feedback" class="feedback"></p>
     </section>
-    <section class="card full tab-pane" id="reading-tools" data-tab-pane="practice">
+    <section class="card full tab-pane practice-skill" id="reading-tools" data-tab-pane="practice" data-skill-pane="reading">
       <h2>Công cụ Reading</h2>
       <div class="row"><button id="reading-highlight">Highlight từ khóa</button><button id="reading-hide-passage" class="ghost">Ẩn/Hiện bài đọc</button><button id="reading-translate-toggle" class="ghost">Bật note bôi đen</button></div>
       <p id="reading-keywords" class="muted"></p><p id="reading-translate-status" class="muted">Chọn đoạn trong bài đọc để thêm note nhanh.</p>
@@ -78,9 +89,9 @@
       <div class="row" id="reading-note-actions"><button id="reading-save-selected" class="ghost">Lưu mục đã tick vào DB</button><button id="reading-uncheck-all" class="ghost">Bỏ tick tất cả</button></div>
       <p id="reading-note-summary" class="muted"></p><ul id="reading-word-list" class="vocab-list"></ul><p id="reading-note-status" class="muted"></p><div id="reading-translate-tooltip" class="translate-tooltip" hidden></div>
     </section>
-    <section class="card tab-pane" data-tab-pane="practice"><h2>Listening</h2><div id="listening-box"></div></section>
-    <section class="card tab-pane" data-tab-pane="practice"><h2>Speaking</h2><div id="speaking-box"></div><textarea id="speaking-answer" rows="4" placeholder="Nhập câu trả lời speaking..."></textarea><button id="check-speaking">Chấm Speaking</button><p id="speaking-feedback" class="feedback"></p></section>
-    <section class="card tab-pane" data-tab-pane="practice"><h2>Writing</h2><div id="writing-box"></div><textarea id="writing-answer" rows="6" placeholder="Nhập đoạn writing của bạn..."></textarea><button id="check-writing">Chấm Writing</button><p id="writing-feedback" class="feedback"></p></section>
+    <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="listening"><h2>Listening</h2><div id="listening-box"></div></section>
+    <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="speaking"><h2>Speaking</h2><div id="speaking-box"></div><textarea id="speaking-answer" rows="4" placeholder="Nhập câu trả lời speaking..."></textarea><button id="check-speaking">Chấm Speaking</button><p id="speaking-feedback" class="feedback"></p></section>
+    <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="writing"><h2>Writing</h2><div id="writing-box"></div><textarea id="writing-answer" rows="6" placeholder="Nhập đoạn writing của bạn..."></textarea><button id="check-writing">Chấm Writing</button><p id="writing-feedback" class="feedback"></p></section>
 
     <section class="card tab-pane" data-tab-pane="notebook"><h2>Vocabulary</h2><div id="vocab-box" class="vocab-list"></div></section>
     <section class="card tab-pane" data-tab-pane="notebook">
@@ -93,15 +104,15 @@
     <section class="card tab-pane" data-tab-pane="notebook"><h2>Luyện ngữ pháp</h2><div id="grammar-practice" class="grammar-practice"></div><div class="row"><button id="check-grammar">Kiểm tra ngữ pháp</button></div><p id="grammar-result" class="feedback"></p></section>
 
     <section class="card tab-pane" data-tab-pane="settings">
-      <h2>Cấu hình API</h2>
+      <h2>Kết nối AI</h2>
       <div class="api-grid"><label>Gemini API Key<input id="api-key" type="password" placeholder="Dán API key ở đây" /></label><label>Model<input id="model-name" value="gemini-1.5-flash" /></label></div>
       <div class="row"><button id="save-api">Lưu cấu hình</button><button id="test-api" class="ghost">Test kết nối</button><button id="clear-api" class="ghost">Xóa key</button></div>
       <p id="api-status" class="muted"></p>
     </section>
     <section class="card tab-pane" data-tab-pane="settings">
-      <h2>Tài khoản Supabase</h2>
+      <h2>Đồng bộ đám mây</h2>
       <div class="api-grid"><label>Email<input id="auth-email" value="khois2p@gmail.com" /></label><label>Password<input id="auth-password" type="password" value="123ronaldo" /></label></div>
-      <div class="row"><button id="auth-login">Đăng nhập</button><button id="auth-logout" class="ghost">Đăng xuất</button><button id="sync-backfill" class="ghost">Backfill vocab/grammar</button></div>
+      <div class="row"><button id="auth-login">Đăng nhập</button><button id="auth-logout" class="ghost">Đăng xuất</button><button id="sync-backfill" class="ghost">Đồng bộ dữ liệu cũ</button></div>
       <p id="auth-status" class="muted"></p><p id="sync-status" class="muted"></p>
     </section>
   </main>

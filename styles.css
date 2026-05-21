@@ -55,3 +55,16 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:#93c5fd;box-sh
 .translate-tooltip{position:fixed;max-width:min(460px,90vw);background:#fff;border:1px solid var(--line);border-radius:10px;padding:.6rem .7rem;box-shadow:0 10px 25px rgba(15,23,42,.15);z-index:9999;font-size:.94rem}
 a{color:#2563eb}
 @media (max-width:760px){.tab-bar{grid-template-columns:repeat(2,minmax(0,1fr))}.card{padding:.95rem}}
+
+.today-hero{background:linear-gradient(130deg,#eff6ff 0%,#ffffff 55%);border-color:#bfdbfe;}
+.next-task-card{display:flex;align-items:center;justify-content:space-between;gap:.8rem;}
+.next-task-main{display:flex;align-items:center;gap:.7rem;}
+.task-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#dbeafe;}
+.task-meta{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;}
+.skill-switcher{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem;}
+.skill-btn{background:#fff;border:1px solid var(--line);color:#334155;}
+.skill-btn.active{background:#1d4ed8;color:#fff;border-color:#1d4ed8;}
+.practice-skill{display:none;}
+.practice-skill.active-skill{display:block;}
+.check-item-label{display:flex;align-items:center;gap:.45rem;}
+@media (max-width:760px){.skill-switcher{grid-template-columns:repeat(2,minmax(0,1fr));}.next-task-card{flex-direction:column;align-items:flex-start;}}

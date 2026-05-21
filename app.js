@@ -255,9 +255,10 @@ function renderChecklist() {
     el.checklist.innerHTML = '<p class="muted empty-state">Chưa có task hôm nay. Vào tab "Hôm nay" và bấm "Tạo kế hoạch hôm nay".</p>';
     return;
   }
-  el.checklist.innerHTML = day.tasks.map((t, i) => `<label class="task-item"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span>${sanitize(t.label)}</span><small>${t.duration} phút</small></label>`).join('');
+  const iconForTask = (label='') => { const l=label.toLowerCase(); if(l.includes('read')) return '📖'; if(l.includes('listen')) return '🎧'; if(l.includes('speak')) return '🗣️'; if(l.includes('writ')) return '✍️'; if(l.includes('vocab')||l.includes('từ')) return '🧠'; if(l.includes('grammar')||l.includes('ngữ')) return '🧩'; return '✅'; };
+  el.checklist.innerHTML = day.tasks.map((t, i) => `<label class="task-item"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span class="check-item-label"><span>${iconForTask(String(t.label||''))}</span><span>${sanitize(t.label)}</span></span><small>${t.duration} phút</small></label>`).join('');
   el.checklist.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
-    const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderStats();
+    const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderTodaySummary(); renderStats();
   }));
 }
 
@@ -271,10 +272,14 @@ function renderTodaySummary() {
   if (!next) {
     elNext.textContent = day.tasks?.length ? '🎉 Bạn đã hoàn thành toàn bộ nhiệm vụ hôm nay.' : 'Chưa có kế hoạch cho hôm nay.';
     elNext.classList.add('empty-state');
+    elNext.classList.remove('next-task-card');
     return;
   }
+  const iconForTask = (label='') => { const l=label.toLowerCase(); if(l.includes('read')) return '📖'; if(l.includes('listen')) return '🎧'; if(l.includes('speak')) return '🗣️'; if(l.includes('writ')) return '✍️'; if(l.includes('vocab')||l.includes('từ')) return '🧠'; if(l.includes('grammar')||l.includes('ngữ')) return '🧩'; return '🚀'; };
   elNext.classList.remove('empty-state');
-  elNext.innerHTML = `<strong>${sanitize(next.label)}</strong> <span class="note-badge pending">${next.duration} phút</span>`;
+  elNext.classList.add('next-task-card');
+  elNext.innerHTML = `<div class="next-task-main"><span class="task-icon">${iconForTask(String(next.label||''))}</span><div><strong>${sanitize(next.label)}</strong><div class="task-meta"><span class="note-badge pending">${next.duration} phút</span></div></div></div><button class="ghost" data-tab-jump="practice">Bắt đầu</button>`;
+  elNext.querySelector('[data-tab-jump]')?.addEventListener('click', () => { document.querySelector('.tab-btn[data-tab="practice"]')?.click(); });
 }
 
 async function renderStatsCloudFirst() {
@@ -546,6 +551,7 @@ function renderStats() {
 
   el.completedDays.textContent = completed;
   el.todayProgress.textContent = `${pct}%`;
+  const pf = document.getElementById('today-progress-fill'); if (pf) pf.style.width = `${pct}%`;
   el.streak.textContent = streak;
   el.weeklyTime.textContent = `${(mins / 60).toFixed(1)}h`;
 }
@@ -635,6 +641,7 @@ if (el.generatePlan) el.generatePlan.addEventListener('click', async () => {
     await loadTodayVocabGrammarFromSupabase().catch(() => {});
     renderPlan(plan);
     renderChecklist();
+    renderTodaySummary();
     renderStats();
     renderVocabTools();
     renderGrammarTools();
@@ -803,6 +810,21 @@ function setupTabs() {
   activate('today');
 }
 
+
+
+function setupPracticeSkills() {
+  const skillBtns = [...document.querySelectorAll('.skill-btn')];
+  const skillPanes = [...document.querySelectorAll('.practice-skill')];
+  if (!skillBtns.length || !skillPanes.length) return;
+  const activateSkill = (skill) => {
+    skillBtns.forEach(b => b.classList.toggle('active', b.dataset.skill === skill));
+    skillPanes.forEach(p => p.classList.toggle('active-skill', p.dataset.skillPane === skill));
+  };
+  const firstPending = (state.days[dateKey]?.tasks || []).find(t => !t.done);
+  const mapSkill = (label='') => { const l=label.toLowerCase(); if(l.includes('listen')) return 'listening'; if(l.includes('speak')) return 'speaking'; if(l.includes('writ')) return 'writing'; return 'reading'; };
+  activateSkill(firstPending ? mapSkill(firstPending.label || '') : 'reading');
+  skillBtns.forEach(b => b.addEventListener('click', () => activateSkill(b.dataset.skill)));
+}
 function init() {
   if (window.location.protocol === 'file:') {
     el.genStatus.textContent = 'Bạn đang mở bằng file:// nên có thể gặp lỗi bảo mật khi gọi API. Hãy chạy: python3 -m http.server 8000 rồi mở http://localhost:8000';
@@ -820,6 +842,7 @@ function init() {
   renderVocabTools();
   renderGrammarTools();
   setupTabs();
+  setupPracticeSkills();
 }
 
 async function bootstrap() {
@@ -830,7 +853,7 @@ async function bootstrap() {
   await loadTodayFromSupabase();
   await loadAllReadingNotesFromSupabase().catch(() => {});
   renderReadingNotebook();
-  if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
+  if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderTodaySummary(); renderStats(); renderVocabTools(); renderGrammarTools(); setupPracticeSkills(); }
 }
 bootstrap();
 
@@ -1049,7 +1072,7 @@ el.authLogin?.addEventListener('click', async () => {
     await loadTodayFromSupabase();
     await loadAllReadingNotesFromSupabase().catch(() => {});
     renderReadingNotebook();
-    if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); await renderStatsCloudFirst(); renderVocabTools(); renderGrammarTools(); }
+    if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderTodaySummary(); await renderStatsCloudFirst(); renderVocabTools(); renderGrammarTools(); setupPracticeSkills(); }
     el.authStatus.textContent = 'Đăng nhập thành công ✅ (cloud-only, local chỉ giữ API key/model)';
   } catch (e) {
     el.authStatus.textContent = `Đăng nhập ok nhưng load cloud lỗi: ${e.message}`;
