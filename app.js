@@ -1069,6 +1069,7 @@ function init() {
   renderTodaySummary();
   renderPlanStatusBadge();
   renderStatsCloudFirst();
+  renderPlanStatusBadge();
   renderPhaseNote();
   renderReadingNotebook();
   renderVocabTools();
@@ -1404,3 +1405,4 @@ el.readingUncheckAll?.addEventListener('click', () => {
 
 
 el.checkReading?.addEventListener('click', checkReadingAnswers);
+
