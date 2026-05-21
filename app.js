@@ -81,7 +81,8 @@ const el = {
   phaseSummaryInline: document.getElementById('phase-summary-inline'),
   planPhaseSummary: document.getElementById('plan-phase-summary'),
   planStatusBadge: document.getElementById('plan-status-badge'),
-  reviewTodayCard: document.getElementById('review-today-card')
+  reviewTodayCard: document.getElementById('review-today-card'),
+  coachMessage: document.getElementById('coach-message')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -96,6 +97,7 @@ let cloudOnlyMode = false;
 let readingTranslateEnabled = false;
 let readingDraftNote = null;
 let globalEventsBound = false;
+let questCelebratedDate = null;
 
 function save() {
   const fullState = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -293,10 +295,11 @@ function renderPlan(plan) {
   const query = encodeURIComponent(plan.listening.youtubeQuery || 'english listening practice');
   const link = directUrl || `https://www.youtube.com/results?search_query=${query}`;
   const lState = getListeningState();
-  el.listeningBox.innerHTML = `<div class="youtube-card"><p><strong>🎬 ${sanitize(plan.listening.title)}</strong></p><a class="yt-link" target="_blank" href="${sanitize(link)}">Mở YouTube Practice ↗</a><p class="muted">Nhiệm vụ: ${sanitize(plan.listening.task)}</p><div class="checklist">
-  <label class="task-item"><input type="checkbox" data-listening-check="openedVideo" ${lState.openedVideo ? 'checked' : ''}><span>Đã mở video</span></label>
-  <label class="task-item"><input type="checkbox" data-listening-check="listened10Min" ${lState.listened10Min ? 'checked' : ''}><span>Nghe ít nhất 10 phút</span></label>
-  <label class="task-item"><input type="checkbox" data-listening-check="captured3Phrases" ${lState.captured3Phrases ? 'checked' : ''}><span>Ghi lại 3 từ/cụm nghe được</span></label>
+  const listeningDone = [lState.openedVideo, lState.listened10Min, lState.captured3Phrases].filter(Boolean).length;
+  el.listeningBox.innerHTML = `<div class="youtube-card"><p><strong>🎬 ${sanitize(plan.listening.title)}</strong></p><p class="mini-progress">Listening routine: ${listeningDone}/3 bước</p><a class="yt-link" target="_blank" href="${sanitize(link)}">Mở YouTube Practice ↗</a><p class="muted">Nhiệm vụ: ${sanitize(plan.listening.task)}</p><div class="checklist">
+  <label class="routine-step ${lState.openedVideo ? 'done' : ''}"><input type="checkbox" data-listening-check="openedVideo" ${lState.openedVideo ? 'checked' : ''}><span>1. Mở video</span></label>
+  <label class="routine-step ${lState.listened10Min ? 'done' : ''}"><input type="checkbox" data-listening-check="listened10Min" ${lState.listened10Min ? 'checked' : ''}><span>2. Nghe 10 phút</span></label>
+  <label class="routine-step ${lState.captured3Phrases ? 'done' : ''}"><input type="checkbox" data-listening-check="captured3Phrases" ${lState.captured3Phrases ? 'checked' : ''}><span>3. Ghi lại 3 cụm từ</span></label>
   </div><textarea id="listening-note" rows="4" placeholder="Ghi chú Listening hôm nay...">${sanitize(lState.note || '')}</textarea><div class="row"><button class="ghost" id="save-listening-note">Lưu ghi chú</button><button class="ghost mark-skill-done" data-skill="listening">Đánh dấu Listening hoàn thành</button></div></div>`;
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
@@ -350,12 +353,27 @@ function markTaskCompletedBySkill(skill) {
   updatePracticeSkillDoneState();
   showToast(`Đã đánh dấu ${skill} hoàn thành`);
 }
+
+function getCoachMessage(day) {
+  const messages = {
+    noPlan: ['Coach: Bắt đầu bằng cách tạo plan 6 skill cho hôm nay.', 'Coach: Một plan rõ ràng sẽ giúp bạn đỡ phân vân.'],
+    inProgress: ['Coach: Cứ xong task tiếp theo, momentum sẽ tự lên.', 'Coach: Tiến đều mỗi ngày tốt hơn học dồn.'],
+    completed: ['Coach: Tuyệt vời! Bạn đã hoàn thành Daily Quest hôm nay.', 'Coach: Hoàn tất 6/6 rồi, mai mình giữ streak tiếp nhé.']
+  };
+  const idx = new Date().getDate() % 2;
+  if (!day?.tasks?.length) return messages.noPlan[idx];
+  const done = day.tasks.filter(t=>t.done).length;
+  if (done === day.tasks.length) return messages.completed[idx];
+  return messages.inProgress[idx];
+}
+
 function renderHeroCta() {
   const day = state.days[dateKey] || {};
   const cta = el.heroCtaRow;
   if (!cta) return;
   ensureDailyTasks(day);
   const next = (day.tasks || []).find(t => !t.done);
+  if (el.coachMessage) el.coachMessage.textContent = getCoachMessage(day);
   if (!day.tasks?.length) {
     cta.innerHTML = '<button id="generate-plan" class="btn-primary">Tạo kế hoạch hôm nay</button>';
     document.getElementById('generate-plan')?.addEventListener('click', handleGeneratePlan);
@@ -377,7 +395,11 @@ function renderChecklist() {
     el.checklist.innerHTML = '<p class="muted empty-state">Chưa có task hôm nay. Vào tab "Hôm nay" và bấm "Tạo kế hoạch hôm nay".</p>';
     return;
   }
-  el.checklist.innerHTML = day.tasks.map((t, i) => `<label class="task-item ${t.done ? 'completed' : ''}"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span class="check-item-label"><span>${iconForTask(String(t.label||''))}</span><span>${sanitize(t.label)}${t.done ? ' ✓' : ''}</span></span><small>${t.duration} phút</small></label>`).join('');
+  const nextIdx = day.tasks.findIndex(t => !t.done);
+  el.checklist.innerHTML = day.tasks.map((t, i) => {
+    const cls = t.done ? 'completed' : (i === nextIdx ? 'next' : 'ready');
+    return `<label class="task-item ${cls}"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span class="check-item-label"><span>${iconForTask(String(t.label||''))}</span><span>${sanitize(t.label)}${t.done ? ' ✓' : ''}</span></span><small>${t.duration} phút</small></label>`;
+  }).join('');
   el.checklist.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
     const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderChecklist(); renderTodaySummary(); renderStats(); updatePracticeSkillDoneState(); showToast('Đã cập nhật checklist');
   }));
@@ -389,6 +411,7 @@ function renderTodaySummary() {
   ensureDailyTasks(day);
   renderHeroCta();
   const next = (day.tasks || []).find(t => !t.done);
+  if (el.coachMessage) el.coachMessage.textContent = getCoachMessage(day);
   const elNext = document.getElementById('next-task');
   if (!elNext) return;
   if (!day.tasks?.length) {
@@ -398,9 +421,10 @@ function renderTodaySummary() {
     return;
   }
   if (!next) {
-    elNext.textContent = '🎉 Bạn đã hoàn thành toàn bộ nhiệm vụ hôm nay.';
-    elNext.classList.add('empty-state');
+    elNext.textContent = '🎉 Quest complete! Bạn đã hoàn thành 6/6 nhiệm vụ hôm nay.';
+    elNext.classList.add('empty-state','celebrate');
     elNext.classList.remove('next-task-card');
+    if (questCelebratedDate !== dateKey) { showToast('Xuất sắc! Hoàn thành Daily Quest 6/6'); questCelebratedDate = dateKey; }
     return;
   }
   elNext.classList.remove('empty-state');
@@ -655,7 +679,6 @@ function saveReadingWord() {
     showToast('Đã lưu từ vào notebook');
   }
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = result.msg;
-  if (result.ok) showToast('Đã lưu từ Reading');
 }
 
 function renderStats() {
@@ -737,7 +760,7 @@ async function checkAnswer(skill, question, answer, outEl) {
   outEl.textContent = 'Đang chấm bằng AI...';
   try {
     const result = await callGemini(`Bạn là giám khảo ${skill}. Câu hỏi: ${question}. Câu trả lời của học viên: ${answer}. Trả JSON: {"score":0-10,"feedback":"","fix":""}`);
-    outEl.innerHTML = `Điểm: ${sanitize(result.score)}/10 | Nhận xét: ${sanitize(result.feedback)} | Sửa nhanh: ${sanitize(result.fix)}<br><span>Đã xong phần này?</span> <button class="ghost mark-skill-done" data-skill="${sanitize(skill.toLowerCase())}">Đánh dấu hoàn thành</button>`;
+    outEl.innerHTML = `<div class="report-card"><strong>${sanitize(skill)} Report</strong><div>Điểm: ${sanitize(result.score)}/10</div><div>Nhận xét: ${sanitize(result.feedback)}</div><div>Gợi ý sửa: ${sanitize(result.fix)}</div></div><span>Đã xong phần này?</span> <button class="ghost mark-skill-done" data-skill="${sanitize(skill.toLowerCase())}">Đánh dấu hoàn thành</button>`;
   } catch (e) {
     outEl.textContent = `Không chấm được: ${e.message}`;
   }
@@ -1081,7 +1104,6 @@ function init() {
   renderTodaySummary();
   renderPlanStatusBadge();
   renderStatsCloudFirst();
-  renderPlanStatusBadge();
   renderPhaseNote();
   renderReadingNotebook();
   renderVocabTools();
