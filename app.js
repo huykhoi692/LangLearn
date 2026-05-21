@@ -143,7 +143,7 @@ function renderPhaseNote() {
   const c = PHASE_CONFIG[state.phase] || PHASE_CONFIG.phase1;
   const summary = `${c.label} · ${c.levelBias} · ${c.focus}`;
   if (el.phaseNote) el.phaseNote.textContent = `${c.label}: ${c.focus} (${c.levelBias})`;
-  if (el.phaseSummaryInline) el.phaseSummaryInline.textContent = summary;
+  if (el.phaseSummaryInline) el.phaseSummaryInline.textContent = `${c.label} · ${c.levelBias}`;
   if (el.planPhaseSummary) el.planPhaseSummary.textContent = `Thiết lập hiện tại: ${summary}`;
   const details = document.getElementById('ai-plan-settings');
   if (details && !details.hasAttribute('data-user-toggled')) {
@@ -311,7 +311,7 @@ function renderPlan(plan) {
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.vocabBox.innerHTML = plan.vocabulary.map(v => `<article class="vocab-item vocab-deck-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>“${sanitize(v.example)}”</small></article>`).join('');
-  el.grammarBox.innerHTML = plan.grammar.map(g => `<div class="vocab-item"><strong>${sanitize(g.point)}</strong><span>Bài tập: ${sanitize(g.exercise)}</span><small>Đáp án: ${sanitize(g.answer)}</small></div>`).join('');
+  el.grammarBox.innerHTML = plan.grammar.map(g => `<article class="vocab-item grammar-theory-item"><strong>${sanitize(g.point)}</strong><span>Bài tập: ${sanitize(g.exercise)}</span><small>Đáp án: ${sanitize(g.answer)}</small></article>`).join('');
 
   const readingQs = plan.reading.questions || [];
   el.readingQa.innerHTML = readingQs.map((q, i) => `<div class="vocab-item"><strong>Câu ${i + 1}</strong><span>${sanitize(q)}</span><input class="reading-input" data-i="${i}" placeholder="Nhập câu trả lời của bạn" /></div>`).join('');
@@ -1010,7 +1010,8 @@ function renderNotebookReviewCard() {
   const total = vocabQuizState.total || 0;
   const mastered = vocabQuizState.mastered || 0;
   const still = Math.max(vocabCount - mastered, 0);
-  el.reviewTodayCard.innerHTML = `<div><span>${vocabCount}</span><small>Words today</small></div><div><span>${grammarCount}</span><small>Grammar drills</small></div><div><span>${mastered}</span><small>Mastered</small></div><div><span>${still}</span><small>Still learning</small></div><div><span>${total}</span><small>Quiz attempts</small></div>`;
+  const theoryCount = [...new Set(getTodayGrammar().map(g => g.point).filter(Boolean))].length;
+  el.reviewTodayCard.innerHTML = `<div><span>${vocabCount}</span><small>Words today</small></div><div><span>${theoryCount}</span><small>Grammar theory</small></div><div><span>${grammarCount}</span><small>Grammar drills</small></div><div><span>${mastered}</span><small>Mastered (quiz round)</small></div><div><span>${still}</span><small>Still learning (quiz round)</small></div><div><span>${total}</span><small>Quiz attempts</small></div>`;
 }
 
 function activateTab(name) {
@@ -1442,6 +1443,7 @@ el.phaseSelect?.addEventListener('change', () => {
   state.phase = el.phaseSelect.value;
   save();
   renderPhaseNote();
+  showToast('Đã cập nhật AI Plan Settings');
 });
 
 
