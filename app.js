@@ -238,9 +238,23 @@ function renderPlan(plan) {
 
 }
 
+function ensureDailyTasks(day) {
+  if (!day) return;
+  const hasTasks = Array.isArray(day.tasks) && day.tasks.length > 0;
+  if (hasTasks) return;
+  const checklist = day.plan?.checklist || [];
+  if (!checklist.length) return;
+  day.tasks = checklist.map(t => ({ label: String(t.label || '').trim() || 'Task', duration: Number(t.duration || 15), done: false }));
+}
+
 function renderChecklist() {
   const day = state.days[dateKey];
+  ensureDailyTasks(day);
   el.todayDate.textContent = `Hôm nay: ${dateKey}`;
+  if (!day.tasks?.length) {
+    el.checklist.innerHTML = '<p class="muted">Chưa có task hôm nay. Vào tab "Tổng quan" và bấm "Sinh kế hoạch hôm nay" để tạo checklist.</p>';
+    return;
+  }
   el.checklist.innerHTML = day.tasks.map((t, i) => `<label class="task-item"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span>${sanitize(t.label)}</span><small>${t.duration} phút</small></label>`).join('');
   el.checklist.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
     const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderStats();
@@ -599,6 +613,7 @@ if (el.generatePlan) el.generatePlan.addEventListener('click', async () => {
     const noteBlend = applyNotesToVocabulary(plan);
     state.days[dateKey].plan = plan;
     state.days[dateKey].tasks = (plan.checklist || []).map(t => ({ ...t, done: false }));
+    ensureDailyTasks(state.days[dateKey]);
     save();
     await upsertDayToSupabase(dateKey, state.days[dateKey]);
     await loadTodayVocabGrammarFromSupabase().catch(() => {});
@@ -779,6 +794,7 @@ function init() {
   if (el.phaseSelect) el.phaseSelect.value = state.phase;
   el.modelName.value = state.settings.model || 'gemini-1.5-flash';
   if (state.days[dateKey].plan) renderPlan(state.days[dateKey].plan);
+  ensureDailyTasks(state.days[dateKey]);
   renderChecklist();
   renderStatsCloudFirst();
   renderPhaseNote();
@@ -897,6 +913,7 @@ async function loadTodayFromSupabase() {
     plan: planRow.plan_json,
     tasks: (tasks || []).map(t => ({ label: t.label, duration: t.duration_min, done: t.is_done }))
   };
+  ensureDailyTasks(state.days[dateKey]);
   save();
   return true;
 }
