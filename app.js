@@ -98,11 +98,13 @@ let readingDraftNote = null;
 let globalEventsBound = false;
 
 function save() {
-  if (cloudOnlyMode) {
-    localStorage.setItem(KEY, JSON.stringify({ settings: state.settings }));
-    return;
-  }
-  localStorage.setItem(KEY, JSON.stringify(state));
+  const fullState = JSON.parse(localStorage.getItem(KEY) || '{}');
+  fullState.settings = state.settings;
+  fullState.phase = state.phase;
+  fullState.days = state.days;
+  fullState.readingNotebook = state.readingNotebook || [];
+  fullState.readingNotes = state.readingNotes || [];
+  localStorage.setItem(KEY, JSON.stringify(fullState));
 }
 
 function escapeHTML(value = '') {
@@ -127,6 +129,10 @@ function renderPhaseNote() {
   if (el.phaseNote) el.phaseNote.textContent = `${c.label}: ${c.focus} (${c.levelBias})`;
   if (el.phaseSummaryInline) el.phaseSummaryInline.textContent = summary;
   if (el.planPhaseSummary) el.planPhaseSummary.textContent = `Thiết lập hiện tại: ${summary}`;
+  const details = document.getElementById('ai-plan-settings');
+  if (details && !details.hasAttribute('data-user-toggled')) {
+    details.open = !state.days[dateKey]?.plan;
+  }
 }
 
 async function callGemini(prompt) {
@@ -324,6 +330,7 @@ function markTaskCompletedBySkill(skill) {
   renderPlanStatusBadge();
   renderStats();
   updatePracticeSkillDoneState();
+  showToast(`Đã đánh dấu ${skill} hoàn thành`);
 }
 function renderHeroCta() {
   const day = state.days[dateKey] || {};
@@ -629,6 +636,7 @@ function saveReadingWord() {
     if (el.readingNoteExampleManual) el.readingNoteExampleManual.value = '';
   }
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = result.msg;
+  if (result.ok) showToast('Đã lưu từ Reading');
 }
 
 function renderStats() {
@@ -791,6 +799,7 @@ function startVocabQuizRound() {
   vocabQuizPool = vocab.map(v => ({ ...v, key: normalizeReadingText(v.word) + '|' + normalizeReadingText(v.meaning) }));
   vocabQuizState = { total: 0, correct: 0, mastered: 0 };
   currentQuizTarget = null;
+  renderNotebookReviewCard();
 }
 
 function renderVocabTools() {
@@ -804,6 +813,7 @@ function renderVocabTools() {
   if (!vocabQuizPool.length) startVocabQuizRound();
   el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${vocab.length} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
   renderOneVocabQuestion();
+  renderNotebookReviewCard();
 }
 
 function pickRandomQuizTarget() {
@@ -865,6 +875,7 @@ function renderOneVocabQuestion() {
     el.vocabPracticeResult.textContent = isCorrect
       ? `✅ Chính xác! Ví dụ: ${sanitize(target.example || '')}`
       : `❌ Chưa đúng. Đáp án: ${sanitize(targetMeaning)} (từ này sẽ quay lại)`;
+    renderNotebookReviewCard();
     setTimeout(renderOneVocabQuestion, 450);
   }));
 }
@@ -1023,6 +1034,9 @@ function init() {
   setupTabs();
   setupPracticeSkills();
   setupGlobalEvents();
+  document.getElementById('ai-plan-settings')?.addEventListener('toggle', (e) => {
+    e.currentTarget.setAttribute('data-user-toggled', '1');
+  });
 }
 
 async function bootstrap() {
@@ -1061,6 +1075,7 @@ el.vocabQuizUnknown?.addEventListener('click', () => {
   markUnknownTarget(currentQuizTarget);
   el.vocabPracticeResult.textContent = 'Đã đánh dấu CHƯA BIẾT. Từ này sẽ lặp lại ở lượt sau.';
   el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${totalVocab} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
+  renderNotebookReviewCard();
   setTimeout(renderOneVocabQuestion, 300);
 });
 
