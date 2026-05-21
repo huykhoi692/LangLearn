@@ -1108,7 +1108,6 @@ async function bootstrap() {
     renderPlan(state.days[dateKey].plan);
     renderChecklist();
     renderTodaySummary();
-    renderPlanStatusBadge();
     renderNotebookReviewCard();
     renderPhaseNote();
     renderStats();
