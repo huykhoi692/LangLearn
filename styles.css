@@ -80,8 +80,8 @@ a{color:#2563eb}
 .app-toast.show{opacity:1;transform:translateY(0)}
 .progress-fill{transition:width .45s ease}
 .empty-state{border:1px dashed #cbd5e1;padding:.8rem;border-radius:10px}
-.pulse-highlight{animation:pulseHighlight 1s ease}
-@keyframes pulseHighlight{
-  0%{box-shadow:0 0 0 0 rgba(37,99,235,.35);background:#eef6ff}
-  100%{box-shadow:0 0 0 14px rgba(37,99,235,0);background:transparent}
+.highlight-target{
+  outline:3px solid rgba(37,99,235,.25);
+  background:#eff6ff;
+  transition:background .3s ease, outline .3s ease;
 }

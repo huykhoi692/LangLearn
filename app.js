@@ -652,6 +652,7 @@ function saveReadingWord() {
     if (el.readingNoteWordManual) el.readingNoteWordManual.value = '';
     if (el.readingNoteMeaningManual) el.readingNoteMeaningManual.value = '';
     if (el.readingNoteExampleManual) el.readingNoteExampleManual.value = '';
+    showToast('Đã lưu từ vào notebook');
   }
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = result.msg;
   if (result.ok) showToast('Đã lưu từ Reading');
@@ -770,11 +771,11 @@ async function handleGeneratePlan() {
     renderPlan(plan);
     renderChecklist();
     renderTodaySummary();
-  renderPlanStatusBadge();
+    renderPlanStatusBadge();
     renderStats();
     renderVocabTools();
     renderGrammarTools();
-  renderNotebookReviewCard();
+    renderNotebookReviewCard();
     el.genStatus.textContent = `Đã sinh dữ liệu thành công ✅ (${noteBlend.usedNotes} từ từ note${noteBlend.needsFill ? ', còn lại do AI bổ sung' : ''}).`;
   } catch (e) {
     el.genStatus.textContent = `Lỗi sinh dữ liệu: ${e.message}`;
@@ -1056,10 +1057,10 @@ function setupGlobalEvents() {
         activateTab('notebook');
         targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         if (typeof targetEl.focus === 'function') targetEl.focus();
-        targetEl.classList.remove('pulse-highlight');
+        targetEl.classList.remove('highlight-target');
         void targetEl.offsetWidth;
-        targetEl.classList.add('pulse-highlight');
-        setTimeout(() => targetEl.classList.remove('pulse-highlight'), 1000);
+        targetEl.classList.add('highlight-target');
+        setTimeout(() => targetEl.classList.remove('highlight-target'), 1000);
       }
       showToast('Đã mở khu ôn tập');
     }
@@ -1363,16 +1364,16 @@ el.authLogout?.addEventListener('click', async () => {
 
 
 el.syncBackfill?.addEventListener('click', async () => {
-  el.syncStatus.textContent = 'Đang backfill vocab/grammar từ daily_plans...';
+  el.syncStatus.textContent = 'Đang đồng bộ lại từ vựng/ngữ pháp từ lịch sử học...';
   try {
     const count = await backfillAllVocabGrammarFromDailyPlans();
     await loadTodayVocabGrammarFromSupabase().catch(() => {});
     renderVocabTools();
     renderGrammarTools();
-  renderNotebookReviewCard();
-    el.syncStatus.textContent = `Backfill thành công ${count} ngày ✅`;
+    renderNotebookReviewCard();
+    el.syncStatus.textContent = `Đồng bộ thành công ${count} ngày ✅`;
   } catch (e) {
-    el.syncStatus.textContent = `Backfill lỗi: ${e.message}`;
+    el.syncStatus.textContent = `Đồng bộ lỗi: ${e.message}`;
   }
 });
 
