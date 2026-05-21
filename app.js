@@ -90,6 +90,7 @@ if (!state.readingNotes) state.readingNotes = [];
 let cloudOnlyMode = false;
 let readingTranslateEnabled = false;
 let readingDraftNote = null;
+let globalEventsBound = false;
 
 function save() {
   if (cloudOnlyMode) {
@@ -946,6 +947,17 @@ function setupPracticeSkills() {
   updatePracticeSkillDoneState();
   skillBtns.forEach(b => { b.onclick = () => activatePracticeSkill(b.dataset.skill); });
 }
+
+function setupGlobalEvents() {
+  if (globalEventsBound) return;
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mark-skill-done');
+    if (!btn) return;
+    markTaskCompletedBySkill(btn.dataset.skill);
+  });
+  globalEventsBound = true;
+}
+
 function init() {
   if (window.location.protocol === 'file:') {
     el.genStatus.textContent = 'Bạn đang mở bằng file:// nên có thể gặp lỗi bảo mật khi gọi API. Hãy chạy: python3 -m http.server 8000 rồi mở http://localhost:8000';
@@ -964,11 +976,7 @@ function init() {
   renderGrammarTools();
   setupTabs();
   setupPracticeSkills();
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.mark-skill-done');
-    if (!btn) return;
-    markTaskCompletedBySkill(btn.dataset.skill);
-  });
+  setupGlobalEvents();
 }
 
 async function bootstrap() {
