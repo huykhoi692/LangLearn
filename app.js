@@ -234,7 +234,7 @@ Schema:
  "speaking":{"question":"","hints":["",""],"duration":20},
  "writing":{"question":"","hints":["",""],"duration":30},
  "vocabulary":[{"word":"","meaning":"","example":""}],
- "grammar":[{"point":"","exercise":"","answer":""}],
+ "grammar":[{"point":"","theory":"","exercise":"","answer":""}],
  "checklist":[{"label":"","duration":15}]
 }
 Yêu cầu:
@@ -311,7 +311,7 @@ function renderPlan(plan) {
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.vocabBox.innerHTML = plan.vocabulary.map(v => `<article class="vocab-item vocab-deck-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>“${sanitize(v.example)}”</small></article>`).join('');
-  el.grammarBox.innerHTML = plan.grammar.map(g => `<article class="vocab-item grammar-theory-item"><strong>${sanitize(g.point)}</strong><span>Bài tập: ${sanitize(g.exercise)}</span><small>Đáp án: ${sanitize(g.answer)}</small></article>`).join('');
+  el.grammarBox.innerHTML = plan.grammar.map(g => `<article class="vocab-item grammar-theory-item"><strong>${sanitize(g.point)}</strong><span>Lý thuyết: ${sanitize(g.theory || g.point || "")}</span><small>Mẫu: ${sanitize(g.exercise)}</small></article>`).join('');
 
   const readingQs = plan.reading.questions || [];
   el.readingQa.innerHTML = readingQs.map((q, i) => `<div class="vocab-item"><strong>Câu ${i + 1}</strong><span>${sanitize(q)}</span><input class="reading-input" data-i="${i}" placeholder="Nhập câu trả lời của bạn" /></div>`).join('');
@@ -1266,6 +1266,7 @@ async function upsertDayToSupabase(studyDate, dayData) {
     user_id: user.id,
     study_date: studyDate,
     point: String(g.point || '').trim(),
+    theory: String(g.theory || '').trim(),
     exercise: String(g.exercise || '').trim(),
     answer: String(g.answer || '').trim()
   })).filter(g => g.point && g.exercise && g.answer);
@@ -1309,10 +1310,10 @@ async function loadTodayVocabGrammarFromSupabase() {
   if (!user) return;
   const { data: vocabData, error: ve } = await supa.from('vocab_items').select('word,meaning,example,topic,is_mastered').eq('user_id', user.id).eq('study_date', dateKey);
   if (ve) throw new Error('load vocab lỗi: ' + ve.message);
-  const { data: grammarData, error: ge } = await supa.from('grammar_items').select('point,exercise,answer').eq('user_id', user.id).eq('study_date', dateKey);
+  const { data: grammarData, error: ge } = await supa.from('grammar_items').select('point,theory,exercise,answer').eq('user_id', user.id).eq('study_date', dateKey);
   if (ge) throw new Error('load grammar lỗi: ' + ge.message);
   dbLoadedVocab = (vocabData || []).map(v => ({ word: v.word, meaning: v.meaning, example: v.example, topic: v.topic, is_mastered: !!v.is_mastered }));
-  dbLoadedGrammar = (grammarData || []).map(g => ({ point: g.point, exercise: g.exercise, answer: g.answer }));
+  dbLoadedGrammar = (grammarData || []).map(g => ({ point: g.point, theory: g.theory, exercise: g.exercise, answer: g.answer }));
 }
 
 
