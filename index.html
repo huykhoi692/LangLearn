@@ -29,7 +29,7 @@
       <div id="hero-cta-row" class="cta-row">
         <button id="generate-plan" class="btn-primary">Tạo kế hoạch hôm nay</button>
       </div>
-      <p id="gen-status" class="muted status-line"></p>
+      <div class="hero-meta"><span id="plan-status-badge" class="note-badge pending">Chưa có kế hoạch</span><p id="plan-phase-summary" class="muted"></p></div><p id="gen-status" class="muted status-line"></p>
     </section>
 
     <section class="card stats-row tab-pane" data-tab-pane="today">
@@ -53,26 +53,28 @@
       <div id="daily-checklist" class="checklist"></div>
     </section>
 
-    <section class="card tab-pane" data-tab-pane="today">
-      <h2>Giai đoạn học</h2>
-      <label>Chọn giai đoạn
-        <select id="phase-select">
-          <option value="phase1">Giai đoạn 1 - Tăng nền tảng (B1)</option>
-          <option value="phase2">Giai đoạn 2 - Cân bằng (B1+)</option>
-          <option value="phase3">Giai đoạn 3 - Tăng tốc thi (B2/C1)</option>
-        </select>
-      </label>
-      <p id="phase-note" class="muted"></p>
+    <section class="card tab-pane compact-settings" data-tab-pane="today">
+      <details open>
+        <summary><strong>⚙️ AI Plan Settings</strong> <span id="phase-summary-inline" class="muted"></span></summary>
+        <label>Chọn giai đoạn
+          <select id="phase-select">
+            <option value="phase1">Giai đoạn 1 - Tăng nền tảng (B1)</option>
+            <option value="phase2">Giai đoạn 2 - Cân bằng (B1+)</option>
+            <option value="phase3">Giai đoạn 3 - Tăng tốc thi (B2/C1)</option>
+          </select>
+        </label>
+        <p id="phase-note" class="muted"></p>
+      </details>
     </section>
 
 
     <section class="card tab-pane" data-tab-pane="practice">
       <h2>Luyện tập theo kỹ năng</h2>
       <div class="skill-switcher" id="practice-skill-switcher">
-        <button class="skill-btn active" data-skill="reading">Reading</button>
-        <button class="skill-btn" data-skill="listening">Listening</button>
-        <button class="skill-btn" data-skill="speaking">Speaking</button>
-        <button class="skill-btn" data-skill="writing">Writing</button>
+        <button class="skill-btn active" data-skill="reading">📖 Reading</button>
+        <button class="skill-btn" data-skill="listening">🎧 Listening</button>
+        <button class="skill-btn" data-skill="speaking">🗣️ Speaking</button>
+        <button class="skill-btn" data-skill="writing">✍️ Writing</button>
       </div>
     </section>
 
@@ -90,10 +92,20 @@
         <p id="reading-note-summary" class="muted"></p><ul id="reading-word-list" class="vocab-list"></ul><p id="reading-note-status" class="muted"></p><div id="reading-translate-tooltip" class="translate-tooltip" hidden></div>
       </details>
     </section>
-    <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="listening"><h2>Listening</h2><div id="listening-box"></div></section>
+    <section class="card tab-pane practice-skill listening-card" data-tab-pane="practice" data-skill-pane="listening"><h2>Listening · Passive Mode</h2><div id="listening-box"></div></section>
     <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="speaking"><h2>Speaking</h2><div id="speaking-box"></div><textarea id="speaking-answer" rows="4" placeholder="Nhập câu trả lời speaking..."></textarea><button id="check-speaking">Chấm Speaking</button><p id="speaking-feedback" class="feedback"></p></section>
     <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="writing"><h2>Writing</h2><div id="writing-box"></div><textarea id="writing-answer" rows="6" placeholder="Nhập đoạn writing của bạn..."></textarea><button id="check-writing">Chấm Writing</button><p id="writing-feedback" class="feedback"></p></section>
 
+
+    <section class="card tab-pane" data-tab-pane="notebook">
+      <h2>Ôn hôm nay</h2>
+      <div id="review-today-card" class="stats-row"></div>
+      <div class="row">
+        <button class="ghost" data-scroll-target="vocab-flashcard">Ôn flashcard</button>
+        <button class="ghost" data-scroll-target="vocab-practice">Làm quiz</button>
+        <button class="ghost" data-scroll-target="grammar-practice">Luyện grammar</button>
+      </div>
+    </section>
     <section class="card tab-pane" data-tab-pane="notebook"><h2>Vocabulary</h2><div id="vocab-box" class="vocab-list"></div></section>
     <section class="card tab-pane" data-tab-pane="notebook">
       <h2>Luyện từ vựng</h2><div class="row"><button id="vocab-flash-next">Thẻ tiếp theo</button><button id="vocab-flash-toggle" class="ghost">Hiện nghĩa</button></div>
