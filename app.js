@@ -107,6 +107,13 @@ function save() {
   localStorage.setItem(KEY, JSON.stringify(fullState));
 }
 
+function saveLocalUiState() {
+  const fullState = JSON.parse(localStorage.getItem(KEY) || '{}');
+  fullState.phase = state.phase;
+  fullState.days = state.days;
+  localStorage.setItem(KEY, JSON.stringify(fullState));
+}
+
 function escapeHTML(value = '') {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -1047,7 +1054,19 @@ async function bootstrap() {
   await loadTodayFromSupabase();
   await loadAllReadingNotesFromSupabase().catch(() => {});
   renderReadingNotebook();
-  if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderTodaySummary(); renderStats(); renderVocabTools(); renderGrammarTools(); setupPracticeSkills(); }
+  if (state.days[dateKey].plan) {
+    await loadTodayVocabGrammarFromSupabase().catch(() => {});
+    renderPlan(state.days[dateKey].plan);
+    renderChecklist();
+    renderTodaySummary();
+    renderPlanStatusBadge();
+    renderNotebookReviewCard();
+    renderPhaseNote();
+    renderStats();
+    renderVocabTools();
+    renderGrammarTools();
+    setupPracticeSkills();
+  }
 }
 bootstrap();
 
@@ -1151,6 +1170,7 @@ async function loadTodayFromSupabase() {
     tasks: (tasks || []).map(t => ({ label: t.label, duration: t.duration_min, done: t.is_done }))
   };
   ensureDailyTasks(state.days[dateKey]);
+  getListeningState();
   save();
   return true;
 }
@@ -1268,7 +1288,19 @@ el.authLogin?.addEventListener('click', async () => {
     await loadTodayFromSupabase();
     await loadAllReadingNotesFromSupabase().catch(() => {});
     renderReadingNotebook();
-    if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderTodaySummary(); await renderStatsCloudFirst(); renderVocabTools(); renderGrammarTools(); setupPracticeSkills(); }
+    if (state.days[dateKey].plan) {
+      await loadTodayVocabGrammarFromSupabase().catch(() => {});
+      renderPlan(state.days[dateKey].plan);
+      renderChecklist();
+      renderTodaySummary();
+      renderPlanStatusBadge();
+      renderNotebookReviewCard();
+      renderPhaseNote();
+      renderStats();
+      renderVocabTools();
+      renderGrammarTools();
+      setupPracticeSkills();
+    }
     el.authStatus.textContent = 'Đăng nhập thành công ✅ (cloud-only, local chỉ giữ API key/model)';
   } catch (e) {
     el.authStatus.textContent = `Đăng nhập ok nhưng load cloud lỗi: ${e.message}`;
@@ -1343,7 +1375,7 @@ document.addEventListener('change', (e) => {
   if (!key) return;
   const ls = getListeningState();
   ls[key] = !!e.target.checked;
-  save();
+  saveLocalUiState();
   showToast('Đã lưu tiến độ Listening');
 });
 document.addEventListener('click', (e) => {
@@ -1351,7 +1383,7 @@ document.addEventListener('click', (e) => {
     const note = document.getElementById('listening-note')?.value || '';
     const ls = getListeningState();
     ls.note = note;
-    save();
+    saveLocalUiState();
     showToast('Đã lưu ghi chú Listening');
   }
   const target = e.target?.dataset?.scrollTarget;
@@ -1359,5 +1391,6 @@ document.addEventListener('click', (e) => {
     activateTab('notebook');
     document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     document.getElementById(target)?.focus?.();
+    showToast('Đã chuyển tới mục ôn tập');
   }
 });
