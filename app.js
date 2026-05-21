@@ -1065,6 +1065,7 @@ function init() {
   renderTodaySummary();
   renderPlanStatusBadge();
   renderStatsCloudFirst();
+  renderPlanStatusBadge();
   renderPhaseNote();
   renderReadingNotebook();
   renderVocabTools();
