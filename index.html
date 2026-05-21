@@ -26,9 +26,8 @@
       <p class="eyebrow">Xin chào 👋</p>
       <h2>Hôm nay học gì?</h2>
       <p class="muted">Giữ nhịp học ngắn gọn, rõ ràng và hoàn thành đủ 6 kỹ năng trong ngày.</p>
-      <div class="cta-row">
+      <div id="hero-cta-row" class="cta-row">
         <button id="generate-plan" class="btn-primary">Tạo kế hoạch hôm nay</button>
-        <button class="ghost" data-tab-jump="practice">Bắt đầu học</button>
       </div>
       <p id="gen-status" class="muted status-line"></p>
     </section>
@@ -82,12 +81,14 @@
       <div class="row"><button id="check-reading">Chấm Reading</button></div><p id="reading-feedback" class="feedback"></p>
     </section>
     <section class="card full tab-pane practice-skill" id="reading-tools" data-tab-pane="practice" data-skill-pane="reading">
-      <h2>Công cụ Reading</h2>
-      <div class="row"><button id="reading-highlight">Highlight từ khóa</button><button id="reading-hide-passage" class="ghost">Ẩn/Hiện bài đọc</button><button id="reading-translate-toggle" class="ghost">Bật note bôi đen</button></div>
-      <p id="reading-keywords" class="muted"></p><p id="reading-translate-status" class="muted">Chọn đoạn trong bài đọc để thêm note nhanh.</p>
-      <div class="row"><input id="reading-note-word-manual" placeholder="Từ/cụm từ" /><input id="reading-note-meaning-manual" placeholder="Nghĩa tiếng Việt" /><input id="reading-note-example-manual" placeholder="Ví dụ (tuỳ chọn)" /><button id="reading-save-word" class="ghost">Lưu từ vào notebook</button></div>
-      <div class="row" id="reading-note-actions"><button id="reading-save-selected" class="ghost">Lưu mục đã tick vào DB</button><button id="reading-uncheck-all" class="ghost">Bỏ tick tất cả</button></div>
-      <p id="reading-note-summary" class="muted"></p><ul id="reading-word-list" class="vocab-list"></ul><p id="reading-note-status" class="muted"></p><div id="reading-translate-tooltip" class="translate-tooltip" hidden></div>
+      <details>
+        <summary><strong>Công cụ Reading nâng cao</strong></summary>
+        <div class="row"><button id="reading-highlight">Highlight từ khóa</button><button id="reading-hide-passage" class="ghost">Ẩn/Hiện bài đọc</button><button id="reading-translate-toggle" class="ghost">Bật note bôi đen</button></div>
+        <p id="reading-keywords" class="muted"></p><p id="reading-translate-status" class="muted">Chọn đoạn trong bài đọc để thêm note nhanh.</p>
+        <div class="row"><input id="reading-note-word-manual" placeholder="Từ/cụm từ" /><input id="reading-note-meaning-manual" placeholder="Nghĩa tiếng Việt" /><input id="reading-note-example-manual" placeholder="Ví dụ (tuỳ chọn)" /><button id="reading-save-word" class="ghost">Lưu từ vào notebook</button></div>
+        <div class="row" id="reading-note-actions"><button id="reading-save-selected" class="ghost">Lưu mục đã tick vào DB</button><button id="reading-uncheck-all" class="ghost">Bỏ tick tất cả</button></div>
+        <p id="reading-note-summary" class="muted"></p><ul id="reading-word-list" class="vocab-list"></ul><p id="reading-note-status" class="muted"></p><div id="reading-translate-tooltip" class="translate-tooltip" hidden></div>
+      </details>
     </section>
     <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="listening"><h2>Listening</h2><div id="listening-box"></div></section>
     <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="speaking"><h2>Speaking</h2><div id="speaking-box"></div><textarea id="speaking-answer" rows="4" placeholder="Nhập câu trả lời speaking..."></textarea><button id="check-speaking">Chấm Speaking</button><p id="speaking-feedback" class="feedback"></p></section>
