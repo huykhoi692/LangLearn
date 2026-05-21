@@ -856,7 +856,7 @@ function checkGrammarAnswers() {
 
 function activateTab(name) {
   const buttons = [...document.querySelectorAll('.tab-btn')];
-  const panes = [...document.querySelectorAll('.tab-pane:not(.practice-skill)')];
+  const panes = [...document.querySelectorAll('.tab-pane')];
   buttons.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   panes.forEach(p => p.classList.toggle('active', p.dataset.tabPane === name));
 }
@@ -866,11 +866,7 @@ function activatePracticeSkill(skill) {
   if (!skillBtns.length || !skillPanes.length) return;
   const valid = ['reading', 'listening', 'speaking', 'writing'].includes(skill) ? skill : 'reading';
   skillBtns.forEach(b => b.classList.toggle('active', b.dataset.skill === valid));
-  skillPanes.forEach(p => {
-    p.classList.remove('active');
-    p.classList.toggle('active-skill', p.dataset.skillPane === valid);
-    if (p.classList.contains('active-skill')) p.classList.add('active');
-  });
+  skillPanes.forEach(p => p.classList.toggle('active-skill', p.dataset.skillPane === valid));
 }
 function updatePracticeSkillDoneState() {
   const tasks = state.days[dateKey]?.tasks || [];
@@ -971,10 +967,11 @@ el.checkGrammar?.addEventListener('click', checkGrammarAnswers);
 el.vocabQuizNext?.addEventListener('click', () => { startVocabQuizRound(); renderVocabTools(); });
 el.vocabQuizUnknown?.addEventListener('click', () => {
   if (!currentQuizTarget) return;
+  const totalVocab = getTodayVocab().length;
   vocabQuizState.total += 1;
   markUnknownTarget(currentQuizTarget);
   el.vocabPracticeResult.textContent = 'Đã đánh dấu CHƯA BIẾT. Từ này sẽ lặp lại ở lượt sau.';
-  el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${dbLoadedVocab.filter(v => v.word && v.meaning).length} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
+  el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${totalVocab} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
   setTimeout(renderOneVocabQuestion, 300);
 });
 
