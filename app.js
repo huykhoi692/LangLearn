@@ -82,7 +82,11 @@ const el = {
   planPhaseSummary: document.getElementById('plan-phase-summary'),
   planStatusBadge: document.getElementById('plan-status-badge'),
   reviewTodayCard: document.getElementById('review-today-card'),
-  coachMessage: document.getElementById('coach-message')
+  coachMessage: document.getElementById('coach-message'),
+  heroProgressRing: document.getElementById('hero-progress-ring'),
+  heroProgressFraction: document.getElementById('hero-progress-fraction'),
+  heroProgressPercent: document.getElementById('hero-progress-percent'),
+  heroPhase: document.getElementById('hero-phase')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -98,6 +102,9 @@ let readingTranslateEnabled = false;
 let readingDraftNote = null;
 let globalEventsBound = false;
 let questCelebratedDate = null;
+let lastReadingSelectionText = "";
+let readingPopoverOpen = false;
+let readingSelectionTimer = null;
 
 function save() {
   const fullState = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -136,7 +143,7 @@ function renderPhaseNote() {
   const c = PHASE_CONFIG[state.phase] || PHASE_CONFIG.phase1;
   const summary = `${c.label} · ${c.levelBias} · ${c.focus}`;
   if (el.phaseNote) el.phaseNote.textContent = `${c.label}: ${c.focus} (${c.levelBias})`;
-  if (el.phaseSummaryInline) el.phaseSummaryInline.textContent = summary;
+  if (el.phaseSummaryInline) el.phaseSummaryInline.textContent = `${c.label} · ${c.levelBias}`;
   if (el.planPhaseSummary) el.planPhaseSummary.textContent = `Thiết lập hiện tại: ${summary}`;
   const details = document.getElementById('ai-plan-settings');
   if (details && !details.hasAttribute('data-user-toggled')) {
@@ -303,8 +310,8 @@ function renderPlan(plan) {
   </div><textarea id="listening-note" rows="4" placeholder="Ghi chú Listening hôm nay...">${sanitize(lState.note || '')}</textarea><div class="row"><button class="ghost" id="save-listening-note">Lưu ghi chú</button><button class="ghost mark-skill-done" data-skill="listening">Đánh dấu Listening hoàn thành</button></div></div>`;
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
-  el.vocabBox.innerHTML = plan.vocabulary.map(v => `<div class="vocab-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>${sanitize(v.example)}</small></div>`).join('');
-  el.grammarBox.innerHTML = plan.grammar.map(g => `<div class="vocab-item"><strong>${sanitize(g.point)}</strong><span>Bài tập: ${sanitize(g.exercise)}</span><small>Đáp án: ${sanitize(g.answer)}</small></div>`).join('');
+  el.vocabBox.innerHTML = plan.vocabulary.map(v => `<article class="vocab-item vocab-deck-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>“${sanitize(v.example)}”</small></article>`).join('');
+  el.grammarBox.innerHTML = plan.grammar.map(g => `<article class="vocab-item grammar-theory-item"><strong>${sanitize(g.point)}</strong><span>Bài tập: ${sanitize(g.exercise)}</span><small>Đáp án: ${sanitize(g.answer)}</small></article>`).join('');
 
   const readingQs = plan.reading.questions || [];
   el.readingQa.innerHTML = readingQs.map((q, i) => `<div class="vocab-item"><strong>Câu ${i + 1}</strong><span>${sanitize(q)}</span><input class="reading-input" data-i="${i}" placeholder="Nhập câu trả lời của bạn" /></div>`).join('');
@@ -398,7 +405,8 @@ function renderChecklist() {
   const nextIdx = day.tasks.findIndex(t => !t.done);
   el.checklist.innerHTML = day.tasks.map((t, i) => {
     const cls = t.done ? 'completed' : (i === nextIdx ? 'next' : 'ready');
-    return `<label class="task-item ${cls}"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span class="check-item-label"><span>${iconForTask(String(t.label||''))}</span><span>${sanitize(t.label)}${t.done ? ' ✓' : ''}</span></span><small>${t.duration} phút</small></label>`;
+    const badge = t.done ? 'DONE' : (i === nextIdx ? 'NEXT' : 'READY');
+    return `<label class="task-item ${cls}"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span class="check-item-label"><span class="task-icon-mini">${iconForTask(String(t.label||''))}</span><span>${sanitize(t.label)}</span></span><span class="task-badges"><small class="status-badge ${cls}">${badge}</small><small class="duration-badge">${t.duration} phút</small></span></label>`;
   }).join('');
   el.checklist.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
     const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderChecklist(); renderTodaySummary(); renderStats(); updatePracticeSkillDoneState(); showToast('Đã cập nhật checklist');
@@ -406,10 +414,26 @@ function renderChecklist() {
 }
 
 
+
+function renderHeroProgress(day) {
+  const tasks = day?.tasks || [];
+  const done = tasks.filter(t => t.done).length;
+  const total = tasks.length || 6;
+  const pct = Math.round((done / total) * 100);
+  if (el.heroProgressRing) el.heroProgressRing.style.setProperty('--pct', `${pct}`);
+  if (el.heroProgressFraction) el.heroProgressFraction.textContent = `${done}/${total}`;
+  if (el.heroProgressPercent) el.heroProgressPercent.textContent = `${pct}%`;
+  const phase = PHASE_CONFIG[state.phase]?.label || 'Phase';
+  if (el.heroPhase) el.heroPhase.textContent = `${phase} · ${state.phase}`;
+  const hero = document.querySelector('.today-hero');
+  hero?.classList.toggle('quest-complete', tasks.length>0 && done === tasks.length);
+}
+
 function renderTodaySummary() {
   const day = state.days[dateKey] || {};
   ensureDailyTasks(day);
   renderHeroCta();
+  renderHeroProgress(day);
   const next = (day.tasks || []).find(t => !t.done);
   if (el.coachMessage) el.coachMessage.textContent = getCoachMessage(day);
   const elNext = document.getElementById('next-task');
@@ -619,7 +643,7 @@ function showReadingTranslateTooltip(html, x, y) {
   el.readingTranslateTooltip.style.top = `${Math.max(pad, Math.min(y + 8, maxY))}px`;
 }
 
-function maybeSaveReadingDraftNote() {
+function saveReadingDraftNote() {
   if (!readingDraftNote) return;
   const wordEl = document.getElementById('reading-note-word');
   const meaningEl = document.getElementById('reading-note-meaning');
@@ -627,23 +651,30 @@ function maybeSaveReadingDraftNote() {
   const word = (wordEl?.value || readingDraftNote.word || '').trim();
   const meaning = (meaningEl?.value || '').trim();
   const example = (exampleEl?.value || '').trim();
-  if (!word || !meaning) return;
+  if (!word || !meaning) return { ok: false, msg: 'Thiếu từ hoặc nghĩa.' };
   const result = createReadingNote(word, meaning, example, 'selection');
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = result.msg;
+  return result;
 }
 
 function showReadingNotePopover(word, x, y) {
+  readingPopoverOpen = true;
   readingDraftNote = { word };
   showReadingTranslateTooltip(`
     <div><strong>Thêm note</strong></div>
     <label>Từ/cụm từ<input id="reading-note-word" value="${sanitize(word)}" /></label>
     <label>Nghĩa<input id="reading-note-meaning" placeholder="Nhập nghĩa tiếng Việt" /></label>
     <label>Ví dụ<input id="reading-note-example" placeholder="Ví dụ ngắn (tuỳ chọn)" /></label>
-    <div class="row"><button id="reading-note-confirm" class="ghost" type="button">Lưu note</button></div><small class="muted">Bạn có thể bấm nút Lưu note hoặc click ra ngoài để lưu.</small>
+    <div class="row"><button id="reading-note-confirm" class="ghost" type="button">Lưu note</button></div><small class="muted">Bạn có thể bấm nút Lưu note. Click ra ngoài để đóng popover.</small>
   `, x, y);
   document.getElementById('reading-note-confirm')?.addEventListener('click', () => {
-    maybeSaveReadingDraftNote();
-    hideReadingTranslateTooltip();
+    const result = saveReadingDraftNote();
+    if (result?.ok) {
+      showToast('Đã lưu note Reading');
+      window.getSelection()?.removeAllRanges();
+      hideReadingTranslateTooltip();
+      setReadingTranslateStatus('Đã lưu note Reading.');
+    }
   });
 }
 
@@ -651,12 +682,22 @@ async function translateSelectedReadingText() {
   if (!readingTranslateEnabled) return;
   const selection = window.getSelection();
   const text = (selection?.toString() || '').trim().replace(/\s+/g, ' ');
-  if (!text || text.length < 2) { hideReadingTranslateTooltip(); return; }
+  if (!text || text.length < 2) return;
+  const normalizedText = normalizeSelectionText(text);
   if (!el.readingBox.contains(selection.anchorNode) || !el.readingBox.contains(selection.focusNode)) return;
+  const activeInPopover = !!(el.readingTranslateTooltip && !el.readingTranslateTooltip.hidden && el.readingTranslateTooltip.contains(document.activeElement));
+  if (readingPopoverOpen && activeInPopover) return;
+  if (readingPopoverOpen && normalizedText === lastReadingSelectionText) return;
   const range = selection.getRangeAt(0);
   const rect = range.getBoundingClientRect();
+  lastReadingSelectionText = normalizedText;
   showReadingNotePopover(text, rect.right, rect.bottom);
-  setReadingTranslateStatus('Đang note từ/cụm từ. Click ra ngoài để lưu.');
+  setReadingTranslateStatus('Đang note từ/cụm từ. Click ra ngoài để đóng popover.');
+}
+
+
+function normalizeSelectionText(text = '') {
+  return String(text).trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function toggleReadingTranslate() {
@@ -750,9 +791,9 @@ function checkReadingAnswers() {
     const ans = String(answers[idx] || '').trim();
     const ok = isReadingAnswerAcceptable(user, ans);
     if (ok) correct += 1;
-    details.push(`C${idx+1}: ${ok ? '✓' : `✗ (${answers[idx] || 'N/A'})`}`);
+    details.push({ idx: idx + 1, ok, answer: ans || 'N/A' });
   });
-  el.readingFeedback.innerHTML = `Reading: ${correct}/${answers.length}. ${sanitize(details.join(' | '))}<br><button class="ghost mark-skill-done" data-skill="reading">Đánh dấu hoàn thành</button>`;
+  el.readingFeedback.innerHTML = `<article class="reading-report"><strong>Reading Report</strong><div class="report-row">Score: ${correct}/${answers.length}</div>${details.map(d => `<div class="report-row ${d.ok ? 'is-correct' : 'is-wrong'}">Câu ${d.idx}: ${d.ok ? 'Đúng' : `Sai · Đáp án gợi ý: ${sanitize(d.answer)}`}</div>`).join('')}<div class="row"><button class="ghost mark-skill-done" data-skill="reading">Đánh dấu hoàn thành</button></div></article>`;
 }
 
 async function checkAnswer(skill, question, answer, outEl) {
@@ -907,6 +948,9 @@ function renderOneVocabQuestion() {
     buttons.forEach(b => b.disabled = true);
     vocabQuizState.total += 1;
     const isCorrect = btn.dataset.correct === 'true';
+    buttons.forEach(b => b.classList.add('disabled'));
+    btn.classList.add(isCorrect ? 'is-correct' : 'is-wrong');
+    if (!isCorrect) { const right = buttons.find(b => b.dataset.correct === 'true'); right?.classList.add('is-correct'); }
     if (isCorrect) {
       vocabQuizState.correct += 1;
       removeMasteredTarget(target);
@@ -930,7 +974,8 @@ function nextFlashcard() {
   }
   currentFlashIndex = (currentFlashIndex + 1) % vocab.length;
   flashShowMeaning = false;
-  el.vocabFlashcard.textContent = sanitize(vocab[currentFlashIndex].word);
+  const w=vocab[currentFlashIndex];
+  el.vocabFlashcard.innerHTML = `<div class="flash-face front"><small>Click để lật</small><strong>${sanitize(w.word)}</strong></div>`;
 }
 
 function toggleFlashMeaning() {
@@ -938,7 +983,7 @@ function toggleFlashMeaning() {
   if (currentFlashIndex < 0 || !vocab.length) return;
   flashShowMeaning = !flashShowMeaning;
   const w = vocab[currentFlashIndex];
-  el.vocabFlashcard.textContent = flashShowMeaning ? `${sanitize(w.word)} — ${sanitize(w.meaning)} | ${sanitize(w.example)}` : sanitize(w.word);
+  el.vocabFlashcard.innerHTML = flashShowMeaning ? `<div class="flash-face back"><small>Click để quay lại</small><strong>${sanitize(w.word)}</strong><p>${sanitize(w.meaning)}</p><em>${sanitize(w.example)}</em></div>` : `<div class="flash-face front"><small>Click để lật</small><strong>${sanitize(w.word)}</strong></div>`;
 }
 
 function renderGrammarTools() {
@@ -947,7 +992,7 @@ function renderGrammarTools() {
     el.grammarPractice.innerHTML = '<p class="muted">Chưa có bài ngữ pháp hôm nay. Hãy tạo kế hoạch trước.</p>';
     return;
   }
-  el.grammarPractice.innerHTML = grammar.map((g, i) => `<div class="vocab-item"><strong>${i + 1}. ${sanitize(g.point)}</strong><span>${sanitize(g.exercise)}</span><input data-i="${i}" class="grammar-input" placeholder="Nhập đáp án của bạn" /></div>`).join('');
+  el.grammarPractice.innerHTML = grammar.map((g, i) => `<article class="vocab-item grammar-drill-item"><strong>${i + 1}. ${sanitize(g.point)}</strong><span class="drill-ex">${sanitize(g.exercise)}</span><input data-i="${i}" class="grammar-input" placeholder="Nhập đáp án của bạn" /><small class="muted">Drill ${i+1}</small></article>`).join('');
   el.grammarResult.textContent = '';
 }
 
@@ -971,8 +1016,10 @@ function renderNotebookReviewCard() {
   const vocabCount = getTodayVocab().length;
   const grammarCount = getTodayGrammar().length;
   const total = vocabQuizState.total || 0;
-  const correct = vocabQuizState.correct || 0;
-  el.reviewTodayCard.innerHTML = `<div><span>${vocabCount}</span><small>Từ vựng hôm nay</small></div><div><span>${grammarCount}</span><small>Grammar hôm nay</small></div><div><span>${correct}/${total || 0}</span><small>Tiến độ quiz</small></div>`;
+  const mastered = vocabQuizState.mastered || 0;
+  const still = Math.max(vocabCount - mastered, 0);
+  const theoryCount = [...new Set(getTodayGrammar().map(g => g.point).filter(Boolean))].length;
+  el.reviewTodayCard.innerHTML = `<div><span>${vocabCount}</span><small>Words today</small></div><div><span>${theoryCount}</span><small>Grammar theory</small></div><div><span>${grammarCount}</span><small>Grammar drills</small></div><div><span>${mastered}</span><small>Mastered (quiz round)</small></div><div><span>${still}</span><small>Still learning (quiz round)</small></div><div><span>${total}</span><small>Quiz attempts</small></div>`;
 }
 
 function activateTab(name) {
@@ -1154,6 +1201,7 @@ el.testApi?.addEventListener('click', async () => {
 
 el.vocabFlashNext?.addEventListener('click', nextFlashcard);
 el.vocabFlashToggle?.addEventListener('click', toggleFlashMeaning);
+el.vocabFlashcard?.addEventListener('click', toggleFlashMeaning);
 el.checkGrammar?.addEventListener('click', checkGrammarAnswers);
 
 el.vocabQuizNext?.addEventListener('click', () => { startVocabQuizRound(); renderVocabTools(); });
@@ -1403,19 +1451,23 @@ el.phaseSelect?.addEventListener('change', () => {
   state.phase = el.phaseSelect.value;
   save();
   renderPhaseNote();
+  showToast('Đã cập nhật AI Plan Settings');
 });
 
 
 el.readingHighlight?.addEventListener('click', applyReadingKeywordHighlight);
 el.readingHidePassage?.addEventListener('click', toggleReadingPassage);
 el.readingTranslateToggle?.addEventListener('click', toggleReadingTranslate);
-el.readingBox?.addEventListener('mouseup', () => { translateSelectedReadingText().catch(() => {}); });
+el.readingBox?.addEventListener('mouseup', () => {
+  if (readingSelectionTimer) clearTimeout(readingSelectionTimer);
+  readingSelectionTimer = setTimeout(() => { translateSelectedReadingText().catch(() => {}); }, 150);
+});
 document.addEventListener('mousedown', (e) => {
   if (!el.readingTranslateTooltip || el.readingTranslateTooltip.hidden) return;
   if (el.readingTranslateTooltip.contains(e.target)) return;
-  if (el.readingBox.contains(e.target)) return;
-  maybeSaveReadingDraftNote();
+  if (el.readingBox?.contains(e.target)) return;
   hideReadingTranslateTooltip();
+  setReadingTranslateStatus('Đã đóng popover thêm note.');
 });
 el.readingSaveWord?.addEventListener('click', saveReadingWord);
 
