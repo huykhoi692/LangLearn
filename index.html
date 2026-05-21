@@ -45,7 +45,7 @@
 
     <section class="card tab-pane" data-tab-pane="today">
       <h2>Nhiệm vụ tiếp theo</h2>
-      <p id="next-task" class="task-card empty-state">Chưa có kế hoạch cho hôm nay.</p>
+      <div id="next-task" class="task-card empty-state">Chưa có kế hoạch cho hôm nay.</div>
     </section>
 
     <section class="card tab-pane" data-tab-pane="today">
@@ -98,10 +98,10 @@
       <h2>Luyện từ vựng</h2><div class="row"><button id="vocab-flash-next">Thẻ tiếp theo</button><button id="vocab-flash-toggle" class="ghost">Hiện nghĩa</button></div>
       <div id="vocab-flashcard" class="flashcard empty-state">Bấm "Thẻ tiếp theo" để bắt đầu.</div>
       <div class="row"><button id="vocab-quiz-next" class="ghost">Bắt đầu/Đổi vòng quiz</button><button id="vocab-quiz-unknown" class="ghost">Chưa biết</button></div>
-      <div id="vocab-practice" class="vocab-quiz"></div><p id="vocab-practice-result" class="feedback"></p><p id="vocab-quiz-score" class="muted"></p>
+      <div id="vocab-practice" class="vocab-quiz"></div><p id="vocab-practice-result" class="feedback"></p><p id="vocab-quiz-score" class="muted"></p><div class="row"><button class="ghost mark-skill-done" data-skill="vocabulary">Đánh dấu Vocabulary hoàn thành</button></div>
     </section>
     <section class="card tab-pane" data-tab-pane="notebook"><h2>Grammar</h2><div id="grammar-box" class="vocab-list"></div></section>
-    <section class="card tab-pane" data-tab-pane="notebook"><h2>Luyện ngữ pháp</h2><div id="grammar-practice" class="grammar-practice"></div><div class="row"><button id="check-grammar">Kiểm tra ngữ pháp</button></div><p id="grammar-result" class="feedback"></p></section>
+    <section class="card tab-pane" data-tab-pane="notebook"><h2>Luyện ngữ pháp</h2><div id="grammar-practice" class="grammar-practice"></div><div class="row"><button id="check-grammar">Kiểm tra ngữ pháp</button><button class="ghost mark-skill-done" data-skill="grammar">Đánh dấu Grammar hoàn thành</button></div><p id="grammar-result" class="feedback"></p></section>
 
     <section class="card tab-pane" data-tab-pane="settings">
       <h2>Kết nối AI</h2>
