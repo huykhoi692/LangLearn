@@ -274,7 +274,18 @@ function renderPlanStatusBadge() {
   if (pct===100) { el.planStatusBadge.textContent='Hoàn thành hôm nay'; el.planStatusBadge.className='note-badge ok'; return; }
   el.planStatusBadge.textContent='AI Plan Ready'; el.planStatusBadge.className='note-badge';
 }
-function getListeningState(){ if(!state.days[dateKey].listening) state.days[dateKey].listening={ openedVideo:false,listened10Min:false,captured3Phrases:false,note:''}; return state.days[dateKey].listening;}
+
+function getListeningState() {
+  if (!state.days[dateKey].listening) {
+    state.days[dateKey].listening = {
+      openedVideo: false,
+      listened10Min: false,
+      captured3Phrases: false,
+      note: ''
+    };
+  }
+  return state.days[dateKey].listening;
+}
 
 function renderPlan(plan) {
   el.readingBox.innerHTML = `<h3>${sanitize(plan.reading.title)}</h3><p>${sanitize(plan.reading.passage)}</p><ol>${plan.reading.questions.map(q => `<li>${sanitize(q)}</li>`).join('')}</ol>`;
