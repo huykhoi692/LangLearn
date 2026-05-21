@@ -680,14 +680,13 @@ function showReadingNotePopover(word, x, y) {
 
 async function translateSelectedReadingText() {
   if (!readingTranslateEnabled) return;
+  if (readingPopoverOpen) return;
   const selection = window.getSelection();
   const text = (selection?.toString() || '').trim().replace(/\s+/g, ' ');
   if (!text || text.length < 2) return;
   const normalizedText = normalizeSelectionText(text);
   if (!el.readingBox.contains(selection.anchorNode) || !el.readingBox.contains(selection.focusNode)) return;
-  const activeInPopover = !!(el.readingTranslateTooltip && !el.readingTranslateTooltip.hidden && el.readingTranslateTooltip.contains(document.activeElement));
-  if (readingPopoverOpen && activeInPopover) return;
-  if (readingPopoverOpen && normalizedText === lastReadingSelectionText) return;
+  if (normalizedText === lastReadingSelectionText) return;
   const range = selection.getRangeAt(0);
   const rect = range.getBoundingClientRect();
   lastReadingSelectionText = normalizedText;
