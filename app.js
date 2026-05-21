@@ -240,6 +240,7 @@ Schema:
 Yêu cầu:
 - vocabulary đúng 12 từ
 - grammar đúng 8 bài
+- mỗi grammar item bắt buộc có theory (1-2 câu ngắn giải thích quy tắc bằng tiếng Việt, KHÔNG lặp lại point)
 - reading passage 120-180 words
 - checklist gồm đủ 6 mục ứng với các phần trên.`;
   return callGemini(prompt);
@@ -311,7 +312,7 @@ function renderPlan(plan) {
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.vocabBox.innerHTML = plan.vocabulary.map(v => `<article class="vocab-item vocab-deck-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>“${sanitize(v.example)}”</small></article>`).join('');
-  el.grammarBox.innerHTML = plan.grammar.map(g => `<article class="vocab-item grammar-theory-item"><strong>${sanitize(g.point)}</strong><span>Lý thuyết: ${sanitize(g.theory || g.point || "")}</span><small>Mẫu: ${sanitize(g.exercise)}</small></article>`).join('');
+  el.grammarBox.innerHTML = plan.grammar.map(g => `<article class="vocab-item grammar-theory-item"><strong>${sanitize(g.point)}</strong><span>Lý thuyết: ${sanitize((g.theory || "").trim() || "(Chưa có lý thuyết. Hãy tạo plan mới để lấy theory đầy đủ.)")}</span></article>`).join('');
 
   const readingQs = plan.reading.questions || [];
   el.readingQa.innerHTML = readingQs.map((q, i) => `<div class="vocab-item"><strong>Câu ${i + 1}</strong><span>${sanitize(q)}</span><input class="reading-input" data-i="${i}" placeholder="Nhập câu trả lời của bạn" /></div>`).join('');
