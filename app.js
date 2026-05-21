@@ -683,13 +683,21 @@ async function translateSelectedReadingText() {
   const selection = window.getSelection();
   const text = (selection?.toString() || '').trim().replace(/\s+/g, ' ');
   if (!text || text.length < 2) return;
+  const normalizedText = normalizeSelectionText(text);
   if (!el.readingBox.contains(selection.anchorNode) || !el.readingBox.contains(selection.focusNode)) return;
-  if (readingPopoverOpen && text === lastReadingSelectionText) return;
+  const activeInPopover = !!(el.readingTranslateTooltip && !el.readingTranslateTooltip.hidden && el.readingTranslateTooltip.contains(document.activeElement));
+  if (readingPopoverOpen && activeInPopover) return;
+  if (readingPopoverOpen && normalizedText === lastReadingSelectionText) return;
   const range = selection.getRangeAt(0);
   const rect = range.getBoundingClientRect();
-  lastReadingSelectionText = text;
+  lastReadingSelectionText = normalizedText;
   showReadingNotePopover(text, rect.right, rect.bottom);
   setReadingTranslateStatus('Đang note từ/cụm từ. Click ra ngoài để đóng popover.');
+}
+
+
+function normalizeSelectionText(text = '') {
+  return String(text).trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function toggleReadingTranslate() {
