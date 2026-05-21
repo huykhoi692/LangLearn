@@ -325,6 +325,31 @@ function toggleReadingPassage() {
   p.style.display = p.style.display === 'none' ? '' : 'none';
 }
 
+
+
+function mergeReadingNotes(list = []) {
+  const merged = [];
+  const seen = new Set();
+  list.forEach((n) => {
+    const word = String(n.word || '').trim();
+    const meaning = String(n.meaning || '').trim();
+    if (!word || !meaning) return;
+    const key = word.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push({
+      id: n.id || crypto.randomUUID(),
+      word,
+      meaning,
+      example: String(n.example || '').trim(),
+      selectedForDb: !!n.selectedForDb,
+      mastered: !!n.mastered,
+      source: n.source || 'db'
+    });
+  });
+  state.readingNotes = merged.slice(0, 500);
+}
+
 function renderReadingNotebook() {
   el.readingWordList.innerHTML = (state.readingNotes || []).map((n, i) => `
     <li class="vocab-item">
@@ -389,10 +414,11 @@ function maybeSaveReadingDraftNote() {
     if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Từ "${word}" đã tồn tại, hãy tự chọn giữ bản nào.`;
     return;
   }
-  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: false, mastered: false, source: 'selection' });
+  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: cloudOnlyMode, mastered: false, source: 'selection' });
   state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   renderReadingNotebook();
+  if (cloudOnlyMode) upsertReadingNoteToSupabase(state.readingNotes[0]).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu note "${word}".`;
 }
 
@@ -433,12 +459,13 @@ function saveReadingWord() {
   if (!word || !meaning) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Nhập theo mẫu: word | nghĩa | ví dụ'; return; }
   const existed = state.readingNotes.find(n => n.word.toLowerCase() === word.toLowerCase());
   if (existed) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Từ "${word}" đã tồn tại, hãy tự chọn giữ bản nào.`; return; }
-  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: false, mastered: false, source: 'manual' });
+  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: cloudOnlyMode, mastered: false, source: 'manual' });
   state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   el.readingVocabInput.value = '';
-  if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Đã thêm note. Tick "Lưu vào DB" nếu muốn đồng bộ.';
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = cloudOnlyMode ? 'Đã thêm note và tự đồng bộ DB.' : 'Đã thêm note. Tick "Lưu vào DB" nếu muốn đồng bộ.';
   renderReadingNotebook();
+  if (cloudOnlyMode) upsertReadingNoteToSupabase(state.readingNotes[0]).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
 }
 
 function renderStats() {
@@ -654,6 +681,8 @@ async function bootstrap() {
   if (cloudOnlyMode) save();
   init();
   await loadTodayFromSupabase();
+  await loadAllReadingNotesFromSupabase().catch(() => {});
+  renderReadingNotebook();
   if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
 }
 bootstrap();
@@ -773,6 +802,33 @@ async function loadTodayVocabGrammarFromSupabase() {
   dbLoadedGrammar = (grammarData || []).map(g => ({ point: g.point, exercise: g.exercise, answer: g.answer }));
 }
 
+
+
+async function loadAllReadingNotesFromSupabase() {
+  const user = await currentUser();
+  if (!user) return;
+  const { data, error } = await supa
+    .from('vocab_items')
+    .select('id,word,meaning,example,is_mastered,study_date')
+    .eq('user_id', user.id)
+    .eq('topic', 'reading_note')
+    .order('study_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw new Error('Load reading note lỗi: ' + error.message);
+  const localNotes = state.readingNotes || [];
+  const dbNotes = (data || []).map((row) => ({
+    id: row.id || crypto.randomUUID(),
+    word: row.word,
+    meaning: row.meaning,
+    example: row.example,
+    selectedForDb: true,
+    mastered: !!row.is_mastered,
+    source: 'db'
+  }));
+  mergeReadingNotes([...localNotes, ...dbNotes]);
+  save();
+}
+
 async function upsertReadingNoteToSupabase(note) {
   const user = await currentUser();
   if (!user || !note.selectedForDb) return;
@@ -785,13 +841,30 @@ async function upsertReadingNoteToSupabase(note) {
     topic: 'reading_note',
     is_mastered: !!note.mastered
   };
-  const { data: existed } = await supa.from('vocab_items').select('id').eq('user_id', user.id).eq('word', row.word).limit(1);
-  if (existed?.length && el.readingNoteStatus) {
-    el.readingNoteStatus.textContent = `Từ "${row.word}" đã tồn tại trong DB, bạn hãy tự quyết định giữ bản nào.`;
-    return;
+  const { data: existed, error: findErr } = await supa
+    .from('vocab_items')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('topic', 'reading_note')
+    .eq('word', row.word)
+    .limit(1);
+  if (findErr) throw new Error('Kiểm tra note DB lỗi: ' + findErr.message);
+
+  if (existed?.length) {
+    const { error: updateErr } = await supa
+      .from('vocab_items')
+      .update({
+        meaning: row.meaning,
+        example: row.example,
+        is_mastered: row.is_mastered,
+        study_date: row.study_date
+      })
+      .eq('id', existed[0].id);
+    if (updateErr) throw new Error('Cập nhật note DB lỗi: ' + updateErr.message);
+  } else {
+    const { error: insertErr } = await supa.from('vocab_items').insert(row);
+    if (insertErr) throw new Error('Lưu note vào DB lỗi: ' + insertErr.message);
   }
-  const { error } = await supa.from('vocab_items').upsert(row, { onConflict: 'user_id,study_date,word' });
-  if (error) throw new Error('Lưu note vào DB lỗi: ' + error.message);
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu "${row.word}" vào DB.`;
 }
 
@@ -818,6 +891,8 @@ el.authLogin?.addEventListener('click', async () => {
   el.authStatus.textContent = 'Đăng nhập thành công ✅ cloud-only mode đang bật...';
   try {
     await loadTodayFromSupabase();
+    await loadAllReadingNotesFromSupabase().catch(() => {});
+    renderReadingNotebook();
     if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); await renderStatsCloudFirst(); renderVocabTools(); renderGrammarTools(); }
     el.authStatus.textContent = 'Đăng nhập thành công ✅ (cloud-only, local chỉ giữ API key/model)';
   } catch (e) {
