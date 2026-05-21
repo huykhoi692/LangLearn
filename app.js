@@ -1011,10 +1011,43 @@ function setupPracticeSkills() {
 
 function setupGlobalEvents() {
   if (globalEventsBound) return;
+  document.addEventListener('change', (e) => {
+    const input = e.target.closest('[data-listening-check]');
+    if (!input) return;
+    const key = input.dataset.listeningCheck;
+    if (!key) return;
+    const listening = getListeningState();
+    listening[key] = !!input.checked;
+    saveLocalUiState();
+    showToast('Đã cập nhật Listening');
+  });
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('.mark-skill-done');
-    if (!btn) return;
-    markTaskCompletedBySkill(btn.dataset.skill);
+    if (btn) {
+      markTaskCompletedBySkill(btn.dataset.skill);
+      return;
+    }
+
+    if (e.target?.id === 'save-listening-note') {
+      const textarea = document.getElementById('listening-note');
+      const listening = getListeningState();
+      listening.note = textarea?.value || '';
+      saveLocalUiState();
+      showToast('Đã lưu ghi chú Listening');
+      return;
+    }
+
+    const scrollBtn = e.target.closest('[data-scroll-target]');
+    if (scrollBtn) {
+      const targetId = scrollBtn.dataset.scrollTarget;
+      const targetEl = document.getElementById(targetId);
+      if (targetEl) {
+        activateTab('notebook');
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (typeof targetEl.focus === 'function') targetEl.focus();
+      }
+      showToast('Đã mở khu ôn tập');
+    }
   });
   globalEventsBound = true;
 }
@@ -1369,28 +1402,3 @@ el.readingUncheckAll?.addEventListener('click', () => {
 
 el.checkReading?.addEventListener('click', checkReadingAnswers);
 
-
-document.addEventListener('change', (e) => {
-  const key = e.target?.dataset?.listeningCheck;
-  if (!key) return;
-  const ls = getListeningState();
-  ls[key] = !!e.target.checked;
-  saveLocalUiState();
-  showToast('Đã lưu tiến độ Listening');
-});
-document.addEventListener('click', (e) => {
-  if (e.target?.id === 'save-listening-note') {
-    const note = document.getElementById('listening-note')?.value || '';
-    const ls = getListeningState();
-    ls.note = note;
-    saveLocalUiState();
-    showToast('Đã lưu ghi chú Listening');
-  }
-  const target = e.target?.dataset?.scrollTarget;
-  if (target) {
-    activateTab('notebook');
-    document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    document.getElementById(target)?.focus?.();
-    showToast('Đã chuyển tới mục ôn tập');
-  }
-});
