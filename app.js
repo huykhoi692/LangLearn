@@ -418,8 +418,7 @@ function maybeSaveReadingDraftNote() {
   state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   renderReadingNotebook();
-  if (cloudOnlyMode) upsertReadingNoteToSupabase(state.readingNotes[0]).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
-  if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu note "${word}".`;
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu note "${word}" vào notebook. Tick "Lưu vào DB" để đồng bộ.`;
 }
 
 function showReadingNotePopover(word, x, y) {
@@ -463,7 +462,7 @@ function saveReadingWord() {
   state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   el.readingVocabInput.value = '';
-  if (el.readingNoteStatus) el.readingNoteStatus.textContent = cloudOnlyMode ? 'Đã thêm note và tự đồng bộ DB.' : 'Đã thêm note. Tick "Lưu vào DB" nếu muốn đồng bộ.';
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Đã thêm note vào notebook. Tick "Lưu vào DB" để đồng bộ.';
   renderReadingNotebook();
   if (cloudOnlyMode) upsertReadingNoteToSupabase(state.readingNotes[0]).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
 }
