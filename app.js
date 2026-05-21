@@ -793,7 +793,7 @@ function checkReadingAnswers() {
     if (ok) correct += 1;
     details.push({ idx: idx + 1, ok, answer: ans || 'N/A' });
   });
-  el.readingFeedback.innerHTML = `<article class="reading-report"><strong>Reading Report</strong><div class="report-row">Score: ${correct}/${answers.length}</div>${details.map(d => `<div class="report-row ${d.ok ? 'is-correct' : 'is-wrong'}">Câu ${d.idx}: ${d.ok ? 'Đúng' : `Sai · Đáp án gợi ý: ${sanitize(d.answer)}`}</div>`).join('')}<div class="row"><button class="ghost mark-skill-done" data-skill="reading">Đánh dấu hoàn thành</button></div></article>`;
+  el.readingFeedback.innerHTML = `<article class="reading-report"><strong>Reading Report</strong><div class="report-row">Score: ${correct}/${answers.length}</div>${details.map(d => `<div class="report-row ${d.ok ? 'is-correct' : 'is-wrong'}">Câu ${d.idx}: ${d.ok ? 'Đúng' : 'Sai'} · Đáp án đúng: ${sanitize(d.answer)}</div>`).join('')}<div class="row"><button class="ghost mark-skill-done" data-skill="reading">Đánh dấu hoàn thành</button></div></article>`;
 }
 
 async function checkAnswer(skill, question, answer, outEl) {
