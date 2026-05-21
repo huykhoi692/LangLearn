@@ -64,7 +64,10 @@ const el = {
   readingVocabInput: document.getElementById('reading-vocab-input'),
   readingSaveWord: document.getElementById('reading-save-word'),
   readingWordList: document.getElementById('reading-word-list'),
-  readingNoteStatus: document.getElementById('reading-note-status')
+  readingNoteStatus: document.getElementById('reading-note-status'),
+  readingSaveSelected: document.getElementById('reading-save-selected'),
+  readingUncheckAll: document.getElementById('reading-uncheck-all'),
+  readingNoteSummary: document.getElementById('reading-note-summary')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -185,6 +188,13 @@ Schema:
  "grammar":[{"point":"","exercise":"","answer":""}],
  "checklist":[{"label":"","duration":15}]
 }
+Yêu cầu:
+- vocabulary đúng 12 từ
+- grammar đúng 8 bài
+- reading passage 120-180 words
+- checklist gồm đủ 6 mục ứng với các phần trên.`;
+  return callGemini(prompt);
+}
 
 function getUnmasteredReadingNotes() {
   return (state.readingNotes || []).filter(n => n.selectedForDb && !n.mastered && n.word && n.meaning);
@@ -206,13 +216,6 @@ function applyNotesToVocabulary(plan) {
   });
   plan.vocabulary = merged.slice(0, targetCount);
   return { usedNotes: Math.min(notePool.length, targetCount), needsFill: notePool.length < targetCount };
-}
-Yêu cầu:
-- vocabulary đúng 12 từ
-- grammar đúng 8 bài
-- reading passage 120-180 words
-- checklist gồm đủ 6 mục ứng với các phần trên.`;
-  return callGemini(prompt);
 }
 
 function renderPlan(plan) {
@@ -325,31 +328,69 @@ function toggleReadingPassage() {
   p.style.display = p.style.display === 'none' ? '' : 'none';
 }
 
+
+
+function mergeReadingNotes(list = []) {
+  const merged = [];
+  const seen = new Set();
+  list.forEach((n) => {
+    const word = String(n.word || '').trim();
+    const meaning = String(n.meaning || '').trim();
+    if (!word || !meaning) return;
+    const key = word.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push({
+      id: n.id || crypto.randomUUID(),
+      word,
+      meaning,
+      example: String(n.example || '').trim(),
+      selectedForDb: !!n.selectedForDb,
+      mastered: !!n.mastered,
+      source: n.source || 'db'
+    });
+  });
+  state.readingNotes = merged.slice(0, 500);
+}
+
 function renderReadingNotebook() {
-  el.readingWordList.innerHTML = (state.readingNotes || []).map((n, i) => `
-    <li class="vocab-item">
+  const notes = state.readingNotes || [];
+  const selectedCount = notes.filter(n => n.selectedForDb).length;
+  const unsyncedCount = notes.filter(n => !n.selectedForDb).length;
+  if (el.readingNoteSummary) {
+    el.readingNoteSummary.textContent = `Notebook: ${notes.length} từ | Chờ sync DB: ${unsyncedCount} | Đã tick lưu DB: ${selectedCount}`;
+  }
+
+  el.readingWordList.innerHTML = notes.map((n, i) => `
+    <li class="vocab-item note-item ${n.selectedForDb ? 'note-synced' : 'note-local'}">
       <strong>${i + 1}. ${sanitize(n.word || '')}</strong>
       <span>Nghĩa: ${sanitize(n.meaning || '')}</span>
       <small>Ví dụ: ${sanitize(n.example || '')}</small>
+      <small class="note-badge ${n.selectedForDb ? 'ok' : 'pending'}">${n.selectedForDb ? 'Đã chọn lưu DB' : 'Chỉ ở notebook'}</small>
       <label><input type="checkbox" class="note-select-db" data-id="${sanitize(n.id)}" ${n.selectedForDb ? 'checked' : ''}/> Lưu vào DB</label>
       <label><input type="checkbox" class="note-mastered" data-id="${sanitize(n.id)}" ${n.mastered ? 'checked' : ''}/> Đã thuộc</label>
     </li>
   `).join('');
+
   el.readingWordList.querySelectorAll('.note-select-db').forEach(inp => inp.addEventListener('change', async (e) => {
     const id = e.target.dataset.id;
     const note = state.readingNotes.find(x => x.id === id);
     if (!note) return;
     note.selectedForDb = e.target.checked;
     save();
-    await upsertReadingNoteToSupabase(note).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
+    renderReadingNotebook();
+    if (note.selectedForDb) {
+      await upsertReadingNoteToSupabase(note).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
+    }
   }));
+
   el.readingWordList.querySelectorAll('.note-mastered').forEach(inp => inp.addEventListener('change', async (e) => {
     const id = e.target.dataset.id;
     const note = state.readingNotes.find(x => x.id === id);
     if (!note) return;
     note.mastered = e.target.checked;
     save();
-    await upsertReadingNoteToSupabase(note).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
+    if (note.selectedForDb) await upsertReadingNoteToSupabase(note).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
   }));
 }
 
@@ -393,7 +434,7 @@ function maybeSaveReadingDraftNote() {
   state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   renderReadingNotebook();
-  if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu note "${word}".`;
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu note "${word}" vào notebook. Tick "Lưu vào DB" để đồng bộ.`;
 }
 
 function showReadingNotePopover(word, x, y) {
@@ -437,7 +478,7 @@ function saveReadingWord() {
   state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   el.readingVocabInput.value = '';
-  if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Đã thêm note. Tick "Lưu vào DB" nếu muốn đồng bộ.';
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Đã thêm note vào notebook. Tick "Lưu vào DB" để đồng bộ.';
   renderReadingNotebook();
 }
 
@@ -654,6 +695,8 @@ async function bootstrap() {
   if (cloudOnlyMode) save();
   init();
   await loadTodayFromSupabase();
+  await loadAllReadingNotesFromSupabase().catch(() => {});
+  renderReadingNotebook();
   if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
 }
 bootstrap();
@@ -773,6 +816,33 @@ async function loadTodayVocabGrammarFromSupabase() {
   dbLoadedGrammar = (grammarData || []).map(g => ({ point: g.point, exercise: g.exercise, answer: g.answer }));
 }
 
+
+
+async function loadAllReadingNotesFromSupabase() {
+  const user = await currentUser();
+  if (!user) return;
+  const { data, error } = await supa
+    .from('vocab_items')
+    .select('id,word,meaning,example,is_mastered,study_date')
+    .eq('user_id', user.id)
+    .eq('topic', 'reading_note')
+    .order('study_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw new Error('Load reading note lỗi: ' + error.message);
+  const localNotes = state.readingNotes || [];
+  const dbNotes = (data || []).map((row) => ({
+    id: row.id || crypto.randomUUID(),
+    word: row.word,
+    meaning: row.meaning,
+    example: row.example,
+    selectedForDb: true,
+    mastered: !!row.is_mastered,
+    source: 'db'
+  }));
+  mergeReadingNotes([...localNotes, ...dbNotes]);
+  save();
+}
+
 async function upsertReadingNoteToSupabase(note) {
   const user = await currentUser();
   if (!user || !note.selectedForDb) return;
@@ -785,13 +855,30 @@ async function upsertReadingNoteToSupabase(note) {
     topic: 'reading_note',
     is_mastered: !!note.mastered
   };
-  const { data: existed } = await supa.from('vocab_items').select('id').eq('user_id', user.id).eq('word', row.word).limit(1);
-  if (existed?.length && el.readingNoteStatus) {
-    el.readingNoteStatus.textContent = `Từ "${row.word}" đã tồn tại trong DB, bạn hãy tự quyết định giữ bản nào.`;
-    return;
+  const { data: existed, error: findErr } = await supa
+    .from('vocab_items')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('topic', 'reading_note')
+    .eq('word', row.word)
+    .limit(1);
+  if (findErr) throw new Error('Kiểm tra note DB lỗi: ' + findErr.message);
+
+  if (existed?.length) {
+    const { error: updateErr } = await supa
+      .from('vocab_items')
+      .update({
+        meaning: row.meaning,
+        example: row.example,
+        is_mastered: row.is_mastered,
+        study_date: row.study_date
+      })
+      .eq('id', existed[0].id);
+    if (updateErr) throw new Error('Cập nhật note DB lỗi: ' + updateErr.message);
+  } else {
+    const { error: insertErr } = await supa.from('vocab_items').insert(row);
+    if (insertErr) throw new Error('Lưu note vào DB lỗi: ' + insertErr.message);
   }
-  const { error } = await supa.from('vocab_items').upsert(row, { onConflict: 'user_id,study_date,word' });
-  if (error) throw new Error('Lưu note vào DB lỗi: ' + error.message);
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu "${row.word}" vào DB.`;
 }
 
@@ -818,6 +905,8 @@ el.authLogin?.addEventListener('click', async () => {
   el.authStatus.textContent = 'Đăng nhập thành công ✅ cloud-only mode đang bật...';
   try {
     await loadTodayFromSupabase();
+    await loadAllReadingNotesFromSupabase().catch(() => {});
+    renderReadingNotebook();
     if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); await renderStatsCloudFirst(); renderVocabTools(); renderGrammarTools(); }
     el.authStatus.textContent = 'Đăng nhập thành công ✅ (cloud-only, local chỉ giữ API key/model)';
   } catch (e) {
@@ -865,5 +954,23 @@ document.addEventListener('mousedown', (e) => {
   hideReadingTranslateTooltip();
 });
 el.readingSaveWord?.addEventListener('click', saveReadingWord);
+
+el.readingSaveSelected?.addEventListener('click', async () => {
+  const toSync = (state.readingNotes || []).filter(n => n.selectedForDb && n.word && n.meaning);
+  if (!toSync.length) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Chưa có mục nào được tick để lưu DB.'; return; }
+  let ok = 0;
+  for (const note of toSync) {
+    try { await upsertReadingNoteToSupabase(note); ok += 1; } catch (_) {}
+  }
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã xử lý lưu DB ${ok}/${toSync.length} mục được tick.`;
+});
+
+el.readingUncheckAll?.addEventListener('click', () => {
+  (state.readingNotes || []).forEach(n => { n.selectedForDb = false; });
+  save();
+  renderReadingNotebook();
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Đã bỏ tick lưu DB cho tất cả mục.';
+});
+
 
 el.checkReading?.addEventListener('click', checkReadingAnswers);
