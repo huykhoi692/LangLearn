@@ -277,7 +277,9 @@ function markTaskCompletedBySkill(skill) {
   if (!day?.tasks?.length) return;
   const idx = day.tasks.findIndex(t => {
     const d = getTaskDestination(t.label || '');
-    return d.tab === 'practice' && d.skill === skill;
+    if (skill === 'vocabulary') return d.tab === 'notebook' && String(t.label || '').toLowerCase().includes('vocab') && !t.done;
+    if (skill === 'grammar') return d.tab === 'notebook' && String(t.label || '').toLowerCase().includes('grammar') && !t.done;
+    return d.tab === 'practice' && d.skill === skill && !t.done;
   });
   if (idx < 0) return;
   day.tasks[idx].done = true;
@@ -906,8 +908,8 @@ function setupPracticeSkills() {
   const skillPanes = [...document.querySelectorAll('.practice-skill')];
   if (!skillBtns.length || !skillPanes.length) return;
   const firstPending = getFirstPendingTask();
-  const dest = firstPending ? getTaskDestination(firstPending.label || '') : { skill: 'reading' };
-  activatePracticeSkill(dest.skill || 'reading');
+  const dest = firstPending ? getTaskDestination(firstPending.label || '') : { tab: 'practice', skill: 'reading' };
+  if (dest.tab === 'practice' && dest.skill) activatePracticeSkill(dest.skill);
   updatePracticeSkillDoneState();
   skillBtns.forEach(b => { b.onclick = () => activatePracticeSkill(b.dataset.skill); });
 }
