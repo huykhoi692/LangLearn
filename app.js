@@ -77,7 +77,11 @@ const el = {
   readingNoteStatus: document.getElementById('reading-note-status'),
   readingSaveSelected: document.getElementById('reading-save-selected'),
   readingUncheckAll: document.getElementById('reading-uncheck-all'),
-  readingNoteSummary: document.getElementById('reading-note-summary')
+  readingNoteSummary: document.getElementById('reading-note-summary'),
+  phaseSummaryInline: document.getElementById('phase-summary-inline'),
+  planPhaseSummary: document.getElementById('plan-phase-summary'),
+  planStatusBadge: document.getElementById('plan-status-badge'),
+  reviewTodayCard: document.getElementById('review-today-card')
 };
 
 let state = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -87,17 +91,20 @@ if (!state.days[dateKey]) state.days[dateKey] = { plan: null, tasks: [] };
 if (!state.phase) state.phase = 'phase1';
 if (!state.readingNotebook) state.readingNotebook = [];
 if (!state.readingNotes) state.readingNotes = [];
+if (!state.days[dateKey].listening) state.days[dateKey].listening = { openedVideo: false, listened10Min: false, captured3Phrases: false, note: '' };
 let cloudOnlyMode = false;
 let readingTranslateEnabled = false;
 let readingDraftNote = null;
 let globalEventsBound = false;
 
 function save() {
-  if (cloudOnlyMode) {
-    localStorage.setItem(KEY, JSON.stringify({ settings: state.settings }));
-    return;
-  }
-  localStorage.setItem(KEY, JSON.stringify(state));
+  const fullState = JSON.parse(localStorage.getItem(KEY) || '{}');
+  fullState.settings = state.settings;
+  fullState.phase = state.phase;
+  fullState.days = state.days;
+  fullState.readingNotebook = state.readingNotebook || [];
+  fullState.readingNotes = state.readingNotes || [];
+  localStorage.setItem(KEY, JSON.stringify(fullState));
 }
 
 function escapeHTML(value = '') {
@@ -118,7 +125,14 @@ const PHASE_CONFIG = {
 
 function renderPhaseNote() {
   const c = PHASE_CONFIG[state.phase] || PHASE_CONFIG.phase1;
+  const summary = `${c.label} · ${c.levelBias} · ${c.focus}`;
   if (el.phaseNote) el.phaseNote.textContent = `${c.label}: ${c.focus} (${c.levelBias})`;
+  if (el.phaseSummaryInline) el.phaseSummaryInline.textContent = summary;
+  if (el.planPhaseSummary) el.planPhaseSummary.textContent = `Thiết lập hiện tại: ${summary}`;
+  const details = document.getElementById('ai-plan-settings');
+  if (details && !details.hasAttribute('data-user-toggled')) {
+    details.open = !state.days[dateKey]?.plan;
+  }
 }
 
 async function callGemini(prompt) {
@@ -237,12 +251,35 @@ function applyNotesToVocabulary(plan) {
   return { usedNotes: Math.min(notePool.length, targetCount), needsFill: notePool.length < targetCount };
 }
 
+
+function showToast(message = 'Đã lưu') {
+  let t = document.getElementById('app-toast');
+  if (!t) { t = document.createElement('div'); t.id = 'app-toast'; t.className = 'app-toast'; document.body.appendChild(t); }
+  t.textContent = message; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+function renderPlanStatusBadge() {
+  const day = state.days[dateKey] || {};
+  ensureDailyTasks(day);
+  if (!el.planStatusBadge) return;
+  const pct = day.tasks?.length ? Math.round((day.tasks.filter(t => t.done).length/day.tasks.length)*100) : 0;
+  if (!day.plan) { el.planStatusBadge.textContent = 'Chưa có kế hoạch'; el.planStatusBadge.className='note-badge pending'; return; }
+  if (pct===100) { el.planStatusBadge.textContent='Hoàn thành hôm nay'; el.planStatusBadge.className='note-badge ok'; return; }
+  el.planStatusBadge.textContent='AI Plan Ready'; el.planStatusBadge.className='note-badge';
+}
+function getListeningState(){ if(!state.days[dateKey].listening) state.days[dateKey].listening={ openedVideo:false,listened10Min:false,captured3Phrases:false,note:''}; return state.days[dateKey].listening;}
+
 function renderPlan(plan) {
   el.readingBox.innerHTML = `<h3>${sanitize(plan.reading.title)}</h3><p>${sanitize(plan.reading.passage)}</p><ol>${plan.reading.questions.map(q => `<li>${sanitize(q)}</li>`).join('')}</ol>`;
   const directUrl = (plan.listening.youtubeUrl || '').trim();
   const query = encodeURIComponent(plan.listening.youtubeQuery || 'english listening practice');
   const link = directUrl || `https://www.youtube.com/results?search_query=${query}`;
-  el.listeningBox.innerHTML = `<p><strong>${sanitize(plan.listening.title)}</strong></p><p>${sanitize(plan.listening.task)}</p><a target="_blank" href="${sanitize(link)}">Mở bài nghe</a><div class="row"><button class="ghost mark-skill-done" data-skill="listening">Đánh dấu Listening hoàn thành</button></div>`;
+  const lState = getListeningState();
+  el.listeningBox.innerHTML = `<div class="youtube-card"><p><strong>🎬 ${sanitize(plan.listening.title)}</strong></p><a class="yt-link" target="_blank" href="${sanitize(link)}">Mở YouTube Practice ↗</a><p class="muted">Nhiệm vụ: ${sanitize(plan.listening.task)}</p><div class="checklist">
+  <label class="task-item"><input type="checkbox" data-listening-check="openedVideo" ${lState.openedVideo ? 'checked' : ''}><span>Đã mở video</span></label>
+  <label class="task-item"><input type="checkbox" data-listening-check="listened10Min" ${lState.listened10Min ? 'checked' : ''}><span>Nghe ít nhất 10 phút</span></label>
+  <label class="task-item"><input type="checkbox" data-listening-check="captured3Phrases" ${lState.captured3Phrases ? 'checked' : ''}><span>Ghi lại 3 từ/cụm nghe được</span></label>
+  </div><textarea id="listening-note" rows="4" placeholder="Ghi chú Listening hôm nay...">${sanitize(lState.note || '')}</textarea><div class="row"><button class="ghost" id="save-listening-note">Lưu ghi chú</button><button class="ghost mark-skill-done" data-skill="listening">Đánh dấu Listening hoàn thành</button></div></div>`;
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.vocabBox.innerHTML = plan.vocabulary.map(v => `<div class="vocab-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>${sanitize(v.example)}</small></div>`).join('');
@@ -290,8 +327,10 @@ function markTaskCompletedBySkill(skill) {
   upsertDayToSupabase(dateKey, day).catch(() => {});
   renderChecklist();
   renderTodaySummary();
+  renderPlanStatusBadge();
   renderStats();
   updatePracticeSkillDoneState();
+  showToast(`Đã đánh dấu ${skill} hoàn thành`);
 }
 function renderHeroCta() {
   const day = state.days[dateKey] || {};
@@ -322,7 +361,7 @@ function renderChecklist() {
   }
   el.checklist.innerHTML = day.tasks.map((t, i) => `<label class="task-item ${t.done ? 'completed' : ''}"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span class="check-item-label"><span>${iconForTask(String(t.label||''))}</span><span>${sanitize(t.label)}${t.done ? ' ✓' : ''}</span></span><small>${t.duration} phút</small></label>`).join('');
   el.checklist.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
-    const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderChecklist(); renderTodaySummary(); renderStats(); updatePracticeSkillDoneState();
+    const i = Number(e.target.dataset.i); day.tasks[i].done = e.target.checked; save(); upsertDayToSupabase(dateKey, day).catch(() => {}); renderChecklist(); renderTodaySummary(); renderStats(); updatePracticeSkillDoneState(); showToast('Đã cập nhật checklist');
   }));
 }
 
@@ -597,6 +636,7 @@ function saveReadingWord() {
     if (el.readingNoteExampleManual) el.readingNoteExampleManual.value = '';
   }
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = result.msg;
+  if (result.ok) showToast('Đã lưu từ Reading');
 }
 
 function renderStats() {
@@ -712,9 +752,11 @@ async function handleGeneratePlan() {
     renderPlan(plan);
     renderChecklist();
     renderTodaySummary();
+  renderPlanStatusBadge();
     renderStats();
     renderVocabTools();
     renderGrammarTools();
+  renderNotebookReviewCard();
     el.genStatus.textContent = `Đã sinh dữ liệu thành công ✅ (${noteBlend.usedNotes} từ từ note${noteBlend.needsFill ? ', còn lại do AI bổ sung' : ''}).`;
   } catch (e) {
     el.genStatus.textContent = `Lỗi sinh dữ liệu: ${e.message}`;
@@ -757,6 +799,7 @@ function startVocabQuizRound() {
   vocabQuizPool = vocab.map(v => ({ ...v, key: normalizeReadingText(v.word) + '|' + normalizeReadingText(v.meaning) }));
   vocabQuizState = { total: 0, correct: 0, mastered: 0 };
   currentQuizTarget = null;
+  renderNotebookReviewCard();
 }
 
 function renderVocabTools() {
@@ -770,6 +813,7 @@ function renderVocabTools() {
   if (!vocabQuizPool.length) startVocabQuizRound();
   el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${vocab.length} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
   renderOneVocabQuestion();
+  renderNotebookReviewCard();
 }
 
 function pickRandomQuizTarget() {
@@ -831,6 +875,7 @@ function renderOneVocabQuestion() {
     el.vocabPracticeResult.textContent = isCorrect
       ? `✅ Chính xác! Ví dụ: ${sanitize(target.example || '')}`
       : `❌ Chưa đúng. Đáp án: ${sanitize(targetMeaning)} (từ này sẽ quay lại)`;
+    renderNotebookReviewCard();
     setTimeout(renderOneVocabQuestion, 450);
   }));
 }
@@ -878,6 +923,15 @@ function checkGrammarAnswers() {
   el.grammarResult.textContent = `Bạn đúng ${correct}/${grammar.length} câu. Gợi ý: xem lại phần đáp án ở box Grammar drills.`;
 }
 
+
+function renderNotebookReviewCard() {
+  if (!el.reviewTodayCard) return;
+  const vocabCount = getTodayVocab().length;
+  const grammarCount = getTodayGrammar().length;
+  const total = vocabQuizState.total || 0;
+  const correct = vocabQuizState.correct || 0;
+  el.reviewTodayCard.innerHTML = `<div><span>${vocabCount}</span><small>Từ vựng hôm nay</small></div><div><span>${grammarCount}</span><small>Grammar hôm nay</small></div><div><span>${correct}/${total || 0}</span><small>Tiến độ quiz</small></div>`;
+}
 
 function activateTab(name) {
   const buttons = [...document.querySelectorAll('.tab-btn')];
@@ -969,14 +1023,20 @@ function init() {
   ensureDailyTasks(state.days[dateKey]);
   renderChecklist();
   renderTodaySummary();
+  renderPlanStatusBadge();
   renderStatsCloudFirst();
+  renderPlanStatusBadge();
   renderPhaseNote();
   renderReadingNotebook();
   renderVocabTools();
   renderGrammarTools();
+  renderNotebookReviewCard();
   setupTabs();
   setupPracticeSkills();
   setupGlobalEvents();
+  document.getElementById('ai-plan-settings')?.addEventListener('toggle', (e) => {
+    e.currentTarget.setAttribute('data-user-toggled', '1');
+  });
 }
 
 async function bootstrap() {
@@ -1015,6 +1075,7 @@ el.vocabQuizUnknown?.addEventListener('click', () => {
   markUnknownTarget(currentQuizTarget);
   el.vocabPracticeResult.textContent = 'Đã đánh dấu CHƯA BIẾT. Từ này sẽ lặp lại ở lượt sau.';
   el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${totalVocab} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
+  renderNotebookReviewCard();
   setTimeout(renderOneVocabQuestion, 300);
 });
 
@@ -1228,6 +1289,7 @@ el.syncBackfill?.addEventListener('click', async () => {
     await loadTodayVocabGrammarFromSupabase().catch(() => {});
     renderVocabTools();
     renderGrammarTools();
+  renderNotebookReviewCard();
     el.syncStatus.textContent = `Backfill thành công ${count} ngày ✅`;
   } catch (e) {
     el.syncStatus.textContent = `Backfill lỗi: ${e.message}`;
@@ -1274,3 +1336,28 @@ el.readingUncheckAll?.addEventListener('click', () => {
 
 
 el.checkReading?.addEventListener('click', checkReadingAnswers);
+
+
+document.addEventListener('change', (e) => {
+  const key = e.target?.dataset?.listeningCheck;
+  if (!key) return;
+  const ls = getListeningState();
+  ls[key] = !!e.target.checked;
+  save();
+  showToast('Đã lưu tiến độ Listening');
+});
+document.addEventListener('click', (e) => {
+  if (e.target?.id === 'save-listening-note') {
+    const note = document.getElementById('listening-note')?.value || '';
+    const ls = getListeningState();
+    ls.note = note;
+    save();
+    showToast('Đã lưu ghi chú Listening');
+  }
+  const target = e.target?.dataset?.scrollTarget;
+  if (target) {
+    activateTab('notebook');
+    document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById(target)?.focus?.();
+  }
+});

@@ -72,3 +72,11 @@ a{color:#2563eb}
 .skill-btn.done{border-color:#86efac;color:#166534;background:#f0fdf4;}
 .check-item-label{display:flex;align-items:center;gap:.45rem;}
 @media (max-width:760px){.skill-switcher{grid-template-columns:repeat(2,minmax(0,1fr));}.next-task-card{flex-direction:column;align-items:flex-start;}}
+.hero-meta{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.5rem}
+.compact-settings summary{cursor:pointer;display:flex;justify-content:space-between;gap:.6rem}
+.youtube-card{display:grid;gap:.55rem;background:#f8fbff;border:1px solid #bfdbfe;border-radius:12px;padding:.8rem}
+.yt-link{font-weight:600;text-decoration:none;background:#fff;padding:.45rem .65rem;border:1px solid #dbeafe;border-radius:10px;display:inline-block;width:fit-content}
+.app-toast{position:fixed;right:20px;bottom:20px;background:#0f172a;color:#fff;padding:.6rem .8rem;border-radius:10px;opacity:0;transform:translateY(8px);transition:.25s;z-index:9999}
+.app-toast.show{opacity:1;transform:translateY(0)}
+.progress-fill{transition:width .45s ease}
+.empty-state{border:1px dashed #cbd5e1;padding:.8rem;border-radius:10px}
