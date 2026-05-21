@@ -165,3 +165,11 @@ a{color:#2563eb}
 .grammar-theory-item{border-left:4px solid #c4b5fd;background:linear-gradient(160deg,#faf5ff,#fff)}
 .flashcard{padding:1.35rem}
 .reading-report{gap:.55rem}
+
+
+.listening-card #listening-box{display:grid;gap:.65rem}
+.youtube-card{padding:1rem;gap:.75rem}
+.routine-step{justify-content:flex-start;min-height:54px}
+.routine-step input[type="checkbox"]{width:18px;min-width:18px;height:18px;margin:0;accent-color:#2563eb;flex:none}
+.routine-step span{display:block;line-height:1.35;color:#0f172a}
+.listening-card textarea#listening-note{min-height:92px}
