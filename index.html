@@ -13,7 +13,16 @@
   </header>
 
   <main class="container layout">
-    <section class="card">
+    <section class="card tab-shell">
+      <div class="tab-bar" id="app-tab-bar">
+        <button class="tab-btn active" data-tab="dashboard">Tổng quan</button>
+        <button class="tab-btn" data-tab="reading">Reading & Note</button>
+        <button class="tab-btn" data-tab="speaking">Speaking/Writing</button>
+        <button class="tab-btn" data-tab="vocab">Vocab/Grammar</button>
+        <button class="tab-btn" data-tab="account">Tài khoản</button>
+      </div>
+    </section>
+    <section class="card tab-pane" data-tab-pane="account">
       <h2>Cấu hình API</h2>
       <div class="api-grid">
         <label>Gemini API Key
@@ -32,7 +41,7 @@
     </section>
 
     
-    <section class="card">
+    <section class="card tab-pane" data-tab-pane="account">
       <h2>Đăng nhập Supabase</h2>
       <div class="api-grid">
         <label>Email
@@ -51,7 +60,7 @@
       <p id="sync-status" class="muted"></p>
     </section>
 
-    <section class="card stats-row">
+    <section class="card stats-row tab-pane" data-tab-pane="dashboard">
       <div><span id="completed-days">0</span><small>Ngày hoàn thành</small></div>
       <div><span id="today-progress">0%</span><small>Tiến độ hôm nay</small></div>
       <div><span id="streak">0</span><small>Streak (ngày)</small></div>
@@ -59,7 +68,7 @@
     </section>
 
     
-    <section class="card">
+    <section class="card tab-pane" data-tab-pane="dashboard">
       <h2>Lộ trình 3 giai đoạn</h2>
       <label>Chọn giai đoạn học
         <select id="phase-select">
@@ -71,7 +80,7 @@
       <p id="phase-note" class="muted"></p>
     </section>
 
-    <section class="card">
+    <section class="card tab-pane" data-tab-pane="dashboard">
       <h2>Sinh dữ liệu học trong ngày (AI)</h2>
       <p class="muted">Gồm Reading, Listening (YouTube), Speaking, Writing, Vocabulary, Grammar.</p>
       <div class="row">
@@ -81,12 +90,12 @@
     </section>
 
     <section class="card">
-      <h2>Checklist hôm nay</h2>
+      <h2>Checklist hôm nay (luôn hiển thị)</h2>
       <p id="today-date"></p>
       <div id="daily-checklist" class="checklist"></div>
     </section>
 
-    <section class="card full">
+    <section class="card full tab-pane" data-tab-pane="reading">
       <h2>Reading</h2>
       <div id="reading-box"></div>
       <div id="reading-qa" class="grammar-practice"></div>
@@ -97,7 +106,7 @@
     </section>
 
     
-    <section class="card full" id="reading-tools">
+    <section class="card full tab-pane" id="reading-tools" data-tab-pane="reading">
       <h2>Công cụ hỗ trợ Reading</h2>
       <div class="row">
         <button id="reading-highlight">Highlight từ khóa câu hỏi</button>
@@ -107,21 +116,28 @@
       <p id="reading-keywords" class="muted"></p>
       <p id="reading-translate-status" class="muted">Chọn đoạn trong bài đọc để thêm note nhanh.</p>
       <div class="row">
-        <input id="reading-vocab-input" placeholder="Nhập: word | nghĩa | ví dụ" />
+        <input id="reading-note-word-manual" placeholder="Từ/cụm từ" />
+        <input id="reading-note-meaning-manual" placeholder="Nghĩa tiếng Việt" />
+        <input id="reading-note-example-manual" placeholder="Ví dụ (tuỳ chọn)" />
         <button id="reading-save-word" class="ghost">Lưu từ vào notebook</button>
       </div>
+      <div class="row" id="reading-note-actions">
+        <button id="reading-save-selected" class="ghost">Lưu mục đã tick vào DB</button>
+        <button id="reading-uncheck-all" class="ghost">Bỏ tick tất cả</button>
+      </div>
+      <p id="reading-note-summary" class="muted"></p>
       <ul id="reading-word-list" class="vocab-list"></ul>
       <p id="reading-note-status" class="muted"></p>
       <div id="reading-translate-tooltip" class="translate-tooltip" hidden></div>
     </section>
 
 
-    <section class="card">
+    <section class="card tab-pane" data-tab-pane="reading">
       <h2>Listening (mở trực tiếp video)</h2>
       <div id="listening-box"></div>
     </section>
 
-    <section class="card">
+    <section class="card tab-pane" data-tab-pane="speaking">
       <h2>Speaking</h2>
       <div id="speaking-box"></div>
       <textarea id="speaking-answer" rows="4" placeholder="Nhập câu trả lời speaking (dàn ý hoặc full script)..."></textarea>
@@ -129,7 +145,7 @@
       <p id="speaking-feedback" class="feedback"></p>
     </section>
 
-    <section class="card">
+    <section class="card tab-pane" data-tab-pane="speaking">
       <h2>Writing</h2>
       <div id="writing-box"></div>
       <textarea id="writing-answer" rows="6" placeholder="Nhập đoạn writing của bạn..."></textarea>
@@ -137,12 +153,12 @@
       <p id="writing-feedback" class="feedback"></p>
     </section>
 
-    <section class="card">
+    <section class="card tab-pane" data-tab-pane="vocab">
       <h2>Vocabulary (hôm nay)</h2>
       <div id="vocab-box" class="vocab-list"></div>
     </section>
 
-    <section class="card">
+    <section class="card tab-pane" data-tab-pane="vocab">
       <h2>Công cụ học từ vựng</h2>
       <div class="row">
         <button id="vocab-flash-next">Thẻ tiếp theo</button>
@@ -150,19 +166,20 @@
       </div>
       <div id="vocab-flashcard" class="flashcard">Bấm "Thẻ tiếp theo" để bắt đầu.</div>
       <div class="row">
-        <button id="vocab-quiz-next" class="ghost">Câu nghĩa mới</button>
+        <button id="vocab-quiz-next" class="ghost">Bắt đầu/Đổi vòng quiz</button>
+        <button id="vocab-quiz-unknown" class="ghost">Chưa biết</button>
       </div>
       <div id="vocab-practice" class="vocab-quiz"></div>
       <p id="vocab-practice-result" class="feedback"></p>
       <p id="vocab-quiz-score" class="muted"></p>
     </section>
 
-    <section class="card">
+    <section class="card tab-pane" data-tab-pane="vocab">
       <h2>Grammar drills (hôm nay)</h2>
       <div id="grammar-box" class="vocab-list"></div>
     </section>
 
-    <section class="card">
+    <section class="card tab-pane" data-tab-pane="vocab">
       <h2>Công cụ học ngữ pháp</h2>
       <p class="muted">Làm nhanh các bài grammar trong ngày rồi bấm kiểm tra.</p>
       <div id="grammar-practice" class="grammar-practice"></div>
