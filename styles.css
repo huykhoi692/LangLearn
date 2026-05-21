@@ -114,3 +114,18 @@ a { color:#9fd4ff; }
   .page-header { padding:1.1rem 0 .8rem; }
   .card { padding:.88rem; }
 }
+
+
+.note-item{position:relative;}
+.note-badge{display:inline-block;width:fit-content;padding:.15rem .5rem;border-radius:999px;font-size:.8rem;border:1px solid #2e4470;}
+.note-badge.pending{color:#ffdca8;border-color:#7a5a2b;background:rgba(122,90,43,.15);}
+.note-badge.ok{color:#9bf4cf;border-color:#2f6a55;background:rgba(38,119,89,.18);}
+#reading-note-actions button{min-width:180px;}
+
+.container{width:min(1400px,96vw);}
+.tab-shell{position:sticky;top:0;z-index:30;background:rgba(20,29,49,.95);backdrop-filter: blur(6px);}
+.tab-bar{display:flex;gap:.5rem;flex-wrap:wrap;}
+.tab-btn{background:#223155;border:1px solid #3b4f7f;}
+.tab-btn.active{background:linear-gradient(180deg,#7a8fff 0%, #667eff 100%);}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
