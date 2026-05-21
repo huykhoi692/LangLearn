@@ -290,7 +290,7 @@ function renderPlan(plan) {
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.vocabBox.innerHTML = plan.vocabulary.map(v => `<div class="vocab-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>${sanitize(v.example)}</small></div>`).join('');
-  el.grammarBox.innerHTML = plan.grammar.map(g => `<div class="vocab-item"><strong>${sanitize(g.point)}</strong><span>Lý thuyết: ${sanitize(g.point)}</span><small>Ví dụ chuẩn: ${sanitize(g.answer)}</small></div>`).join('');
+  el.grammarBox.innerHTML = plan.grammar.map(g => `<div class="vocab-item"><strong>${sanitize(g.point)}</strong><span>Bài tập: ${sanitize(g.exercise)}</span><small>Đáp án: ${sanitize(g.answer)}</small></div>`).join('');
 
   const readingQs = plan.reading.questions || [];
   el.readingQa.innerHTML = readingQs.map((q, i) => `<div class="vocab-item"><strong>Câu ${i + 1}</strong><span>${sanitize(q)}</span><input class="reading-input" data-i="${i}" placeholder="Nhập câu trả lời của bạn" /></div>`).join('');
@@ -1045,6 +1045,10 @@ function setupGlobalEvents() {
         activateTab('notebook');
         targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         if (typeof targetEl.focus === 'function') targetEl.focus();
+        targetEl.classList.remove('pulse-highlight');
+        void targetEl.offsetWidth;
+        targetEl.classList.add('pulse-highlight');
+        setTimeout(() => targetEl.classList.remove('pulse-highlight'), 1000);
       }
       showToast('Đã mở khu ôn tập');
     }
