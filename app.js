@@ -252,7 +252,7 @@ function renderChecklist() {
   ensureDailyTasks(day);
   el.todayDate.textContent = `Hôm nay: ${dateKey}`;
   if (!day.tasks?.length) {
-    el.checklist.innerHTML = '<p class="muted">Chưa có task hôm nay. Vào tab "Tổng quan" và bấm "Sinh kế hoạch hôm nay" để tạo checklist.</p>';
+    el.checklist.innerHTML = '<p class="muted empty-state">Chưa có task hôm nay. Vào tab "Hôm nay" và bấm "Tạo kế hoạch hôm nay".</p>';
     return;
   }
   el.checklist.innerHTML = day.tasks.map((t, i) => `<label class="task-item"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span>${sanitize(t.label)}</span><small>${t.duration} phút</small></label>`).join('');
@@ -261,6 +261,21 @@ function renderChecklist() {
   }));
 }
 
+
+function renderTodaySummary() {
+  const day = state.days[dateKey] || {};
+  ensureDailyTasks(day);
+  const next = (day.tasks || []).find(t => !t.done);
+  const elNext = document.getElementById('next-task');
+  if (!elNext) return;
+  if (!next) {
+    elNext.textContent = day.tasks?.length ? '🎉 Bạn đã hoàn thành toàn bộ nhiệm vụ hôm nay.' : 'Chưa có kế hoạch cho hôm nay.';
+    elNext.classList.add('empty-state');
+    return;
+  }
+  elNext.classList.remove('empty-state');
+  elNext.innerHTML = `<strong>${sanitize(next.label)}</strong> <span class="note-badge pending">${next.duration} phút</span>`;
+}
 
 async function renderStatsCloudFirst() {
   const user = await currentUser();
@@ -313,6 +328,7 @@ async function renderStatsCloudFirst() {
 
   el.completedDays.textContent = completed;
   el.todayProgress.textContent = `${todayPct}%`;
+  const pf = document.getElementById('today-progress-fill'); if (pf) pf.style.width = `${todayPct}%`;
   el.streak.textContent = streak;
   el.weeklyTime.textContent = `${(mins / 60).toFixed(1)}h`;
 }
@@ -783,7 +799,8 @@ function setupTabs() {
     panes.forEach(p => p.classList.toggle('active', p.dataset.tabPane === name));
   };
   buttons.forEach(b => b.addEventListener('click', () => activate(b.dataset.tab)));
-  activate('dashboard');
+  document.querySelectorAll('[data-tab-jump]').forEach(btn => btn.addEventListener('click', () => activate(btn.dataset.tabJump)));
+  activate('today');
 }
 
 function init() {
@@ -796,6 +813,7 @@ function init() {
   if (state.days[dateKey].plan) renderPlan(state.days[dateKey].plan);
   ensureDailyTasks(state.days[dateKey]);
   renderChecklist();
+  renderTodaySummary();
   renderStatsCloudFirst();
   renderPhaseNote();
   renderReadingNotebook();
