@@ -20,6 +20,7 @@ const el = {
   testApi: document.getElementById('test-api'),
   apiStatus: document.getElementById('api-status'),
   generatePlan: document.getElementById('generate-plan'),
+  heroCtaRow: document.getElementById('hero-cta-row'),
   genStatus: document.getElementById('gen-status'),
   checklist: document.getElementById('daily-checklist'),
   todayDate: document.getElementById('today-date'),
@@ -277,8 +278,9 @@ function markTaskCompletedBySkill(skill) {
   if (!day?.tasks?.length) return;
   const idx = day.tasks.findIndex(t => {
     const d = getTaskDestination(t.label || '');
-    if (skill === 'vocabulary') return d.tab === 'notebook' && String(t.label || '').toLowerCase().includes('vocab') && !t.done;
-    if (skill === 'grammar') return d.tab === 'notebook' && String(t.label || '').toLowerCase().includes('grammar') && !t.done;
+    const label = String(t.label || '').toLowerCase();
+    if (skill === 'vocabulary') return d.tab === 'notebook' && (label.includes('vocab') || label.includes('từ')) && !t.done;
+    if (skill === 'grammar') return d.tab === 'notebook' && (label.includes('grammar') || label.includes('ngữ')) && !t.done;
     return d.tab === 'practice' && d.skill === skill && !t.done;
   });
   if (idx < 0) return;
@@ -289,6 +291,24 @@ function markTaskCompletedBySkill(skill) {
   renderTodaySummary();
   renderStats();
   updatePracticeSkillDoneState();
+}
+function renderHeroCta() {
+  const day = state.days[dateKey] || {};
+  const cta = el.heroCtaRow;
+  if (!cta) return;
+  ensureDailyTasks(day);
+  const next = (day.tasks || []).find(t => !t.done);
+  if (!day.tasks?.length) {
+    cta.innerHTML = '<button id="generate-plan" class="btn-primary">Tạo kế hoạch hôm nay</button>';
+    document.getElementById('generate-plan')?.addEventListener('click', handleGeneratePlan);
+    return;
+  }
+  if (next) {
+    cta.innerHTML = `<button class="btn-primary" id="hero-continue-task">Tiếp tục: ${sanitize(next.label)}</button>`;
+    document.getElementById('hero-continue-task')?.addEventListener('click', () => startTask(next.label));
+    return;
+  }
+  cta.innerHTML = '<button class="ghost" data-tab-jump="notebook">Xem sổ tay</button>';
 }
 
 function renderChecklist() {
@@ -309,6 +329,7 @@ function renderChecklist() {
 function renderTodaySummary() {
   const day = state.days[dateKey] || {};
   ensureDailyTasks(day);
+  renderHeroCta();
   const next = (day.tasks || []).find(t => !t.done);
   const elNext = document.getElementById('next-task');
   if (!elNext) return;
@@ -676,7 +697,7 @@ el.clearApi.addEventListener('click', () => {
   el.apiStatus.textContent = 'Đã xóa API key.';
 });
 
-if (el.generatePlan) el.generatePlan.addEventListener('click', async () => {
+async function handleGeneratePlan() {
   el.genStatus.textContent = 'Đang sinh dữ liệu học hôm nay...';
   try {
     const plan = await generateDailyPlan();
@@ -697,7 +718,8 @@ if (el.generatePlan) el.generatePlan.addEventListener('click', async () => {
   } catch (e) {
     el.genStatus.textContent = `Lỗi sinh dữ liệu: ${e.message}`;
   }
-});
+}
+if (el.generatePlan) el.generatePlan.addEventListener('click', handleGeneratePlan);
 
 el.checkSpeaking.addEventListener('click', () => {
   const q = state.days[dateKey].plan?.speaking?.question || 'Speaking practice';
@@ -897,6 +919,17 @@ function setupTabs() {
     const first = getFirstPendingTask();
     if (first) startTask(first.label || '');
     else activateTab('today');
+  });
+  document.getElementById('hero-cta-row')?.addEventListener('click', e => {
+    const jump = e.target?.dataset?.tabJump;
+    if (!jump) return;
+    if (jump === 'practice') {
+      const first = getFirstPendingTask();
+      if (first) startTask(first.label || '');
+      else activateTab('today');
+      return;
+    }
+    activateTab(jump);
   });
   activateTab('today');
 }
