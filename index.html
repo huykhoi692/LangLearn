@@ -89,8 +89,8 @@
       <p id="gen-status" class="muted"></p>
     </section>
 
-    <section class="card tab-pane" data-tab-pane="dashboard">
-      <h2>Checklist hôm nay</h2>
+    <section class="card">
+      <h2>Checklist hôm nay (luôn hiển thị)</h2>
       <p id="today-date"></p>
       <div id="daily-checklist" class="checklist"></div>
     </section>
@@ -116,7 +116,9 @@
       <p id="reading-keywords" class="muted"></p>
       <p id="reading-translate-status" class="muted">Chọn đoạn trong bài đọc để thêm note nhanh.</p>
       <div class="row">
-        <input id="reading-vocab-input" placeholder="Nhập: word | nghĩa | ví dụ" />
+        <input id="reading-note-word-manual" placeholder="Từ/cụm từ" />
+        <input id="reading-note-meaning-manual" placeholder="Nghĩa tiếng Việt" />
+        <input id="reading-note-example-manual" placeholder="Ví dụ (tuỳ chọn)" />
         <button id="reading-save-word" class="ghost">Lưu từ vào notebook</button>
       </div>
       <div class="row" id="reading-note-actions">
@@ -164,7 +166,8 @@
       </div>
       <div id="vocab-flashcard" class="flashcard">Bấm "Thẻ tiếp theo" để bắt đầu.</div>
       <div class="row">
-        <button id="vocab-quiz-next" class="ghost">Câu nghĩa mới</button>
+        <button id="vocab-quiz-next" class="ghost">Bắt đầu/Đổi vòng quiz</button>
+        <button id="vocab-quiz-unknown" class="ghost">Chưa biết</button>
       </div>
       <div id="vocab-practice" class="vocab-quiz"></div>
       <p id="vocab-practice-result" class="feedback"></p>

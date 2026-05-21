@@ -42,6 +42,7 @@ const el = {
   vocabPractice: document.getElementById('vocab-practice'),
   vocabPracticeResult: document.getElementById('vocab-practice-result'),
   vocabQuizNext: document.getElementById('vocab-quiz-next'),
+  vocabQuizUnknown: document.getElementById('vocab-quiz-unknown'),
   vocabQuizScore: document.getElementById('vocab-quiz-score'),
   grammarPractice: document.getElementById('grammar-practice'),
   checkGrammar: document.getElementById('check-grammar'),
@@ -61,7 +62,9 @@ const el = {
   readingTranslateStatus: document.getElementById('reading-translate-status'),
   readingTranslateTooltip: document.getElementById('reading-translate-tooltip'),
   readingKeywords: document.getElementById('reading-keywords'),
-  readingVocabInput: document.getElementById('reading-vocab-input'),
+  readingNoteWordManual: document.getElementById('reading-note-word-manual'),
+  readingNoteMeaningManual: document.getElementById('reading-note-meaning-manual'),
+  readingNoteExampleManual: document.getElementById('reading-note-example-manual'),
   readingSaveWord: document.getElementById('reading-save-word'),
   readingWordList: document.getElementById('reading-word-list'),
   readingNoteStatus: document.getElementById('reading-note-status'),
@@ -227,7 +230,7 @@ function renderPlan(plan) {
   el.speakingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.speaking.question)}</p><ul>${plan.speaking.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.writingBox.innerHTML = `<p><strong>Đề:</strong> ${sanitize(plan.writing.question)}</p><ul>${plan.writing.hints.map(h => `<li>${sanitize(h)}</li>`).join('')}</ul>`;
   el.vocabBox.innerHTML = plan.vocabulary.map(v => `<div class="vocab-item"><strong>${sanitize(v.word)}</strong><span>${sanitize(v.meaning)}</span><small>${sanitize(v.example)}</small></div>`).join('');
-  el.grammarBox.innerHTML = plan.grammar.map(g => `<div class="vocab-item"><strong>${sanitize(g.point)}</strong><span>${sanitize(g.exercise)}</span><small>Đáp án: ${sanitize(g.answer)}</small></div>`).join('');
+  el.grammarBox.innerHTML = plan.grammar.map(g => `<div class="vocab-item"><strong>${sanitize(g.point)}</strong><span>Lý thuyết: ${sanitize(g.point)}</span><small>Ví dụ chuẩn: ${sanitize(g.answer)}</small></div>`).join('');
 
   const readingQs = plan.reading.questions || [];
   el.readingQa.innerHTML = readingQs.map((q, i) => `<div class="vocab-item"><strong>Câu ${i + 1}</strong><span>${sanitize(q)}</span><input class="reading-input" data-i="${i}" placeholder="Nhập câu trả lời của bạn" /></div>`).join('');
@@ -478,12 +481,16 @@ function toggleReadingTranslate() {
 }
 
 function saveReadingWord() {
-  const raw = (el.readingVocabInput.value || '').trim();
-  if (!raw) return;
-  const [word, meaning = '', example = ''] = raw.split('|').map(x => x.trim());
-  if (!word || !meaning) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Nhập theo mẫu: word | nghĩa | ví dụ'; return; }
+  const word = (el.readingNoteWordManual?.value || '').trim();
+  const meaning = (el.readingNoteMeaningManual?.value || '').trim();
+  const example = (el.readingNoteExampleManual?.value || '').trim();
+  if (!word || !meaning) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Vui lòng nhập đủ Từ/cụm từ và Nghĩa.'; return; }
   const result = createReadingNote(word, meaning, example, 'manual');
-  el.readingVocabInput.value = '';
+  if (result.ok) {
+    if (el.readingNoteWordManual) el.readingNoteWordManual.value = '';
+    if (el.readingNoteMeaningManual) el.readingNoteMeaningManual.value = '';
+    if (el.readingNoteExampleManual) el.readingNoteExampleManual.value = '';
+  }
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = result.msg;
 }
 
@@ -514,6 +521,35 @@ function renderStats() {
 }
 
 
+function normalizeReadingText(text = '') {
+  return String(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getMeaningfulTokens(text = '') {
+  const stop = new Set(['a','an','the','is','are','was','were','to','of','in','on','for','and','or','that','this','it','as','by','with','be','at','from']);
+  return normalizeReadingText(text).split(' ').filter(t => t.length > 2 && !stop.has(t));
+}
+
+function isReadingAnswerAcceptable(userAnswer, expectedAnswer) {
+  const userNorm = normalizeReadingText(userAnswer);
+  const ansNorm = normalizeReadingText(expectedAnswer);
+  if (!userNorm || !ansNorm) return false;
+  if (userNorm === ansNorm) return true;
+  if (userNorm.includes(ansNorm) || ansNorm.includes(userNorm)) return true;
+
+  const userTokens = getMeaningfulTokens(userNorm);
+  const ansTokens = getMeaningfulTokens(ansNorm);
+  if (!userTokens.length || !ansTokens.length) return false;
+  const ansSet = new Set(ansTokens);
+  const common = userTokens.filter(t => ansSet.has(t)).length;
+  const overlap = common / ansTokens.length;
+  return overlap >= 0.6;
+}
+
 function checkReadingAnswers() {
   const plan = state.days[dateKey].plan;
   const answers = plan?.reading?.answers || [];
@@ -522,9 +558,9 @@ function checkReadingAnswers() {
   let correct = 0;
   const details = [];
   inputs.forEach((inp, idx) => {
-    const user = (inp.value || '').trim().toLowerCase();
-    const ans = String(answers[idx] || '').trim().toLowerCase();
-    const ok = user && ans && user === ans;
+    const user = (inp.value || '').trim();
+    const ans = String(answers[idx] || '').trim();
+    const ok = isReadingAnswerAcceptable(user, ans);
     if (ok) correct += 1;
     details.push(`C${idx+1}: ${ok ? '✓' : `✗ (${answers[idx] || 'N/A'})`}`);
   });
@@ -591,34 +627,73 @@ el.checkWriting.addEventListener('click', () => {
 
 let currentFlashIndex = -1;
 let flashShowMeaning = false;
-let vocabQuizState = { total: 0, correct: 0 };
+let vocabQuizState = { total: 0, correct: 0, mastered: 0 };
+let vocabQuizPool = [];
+let currentQuizTarget = null;
 let dbLoadedVocab = [];
 let dbLoadedGrammar = [];
 
+function startVocabQuizRound() {
+  const vocab = dbLoadedVocab.filter(v => v.word && v.meaning);
+  vocabQuizPool = vocab.map(v => ({ ...v, key: normalizeReadingText(v.word) + '|' + normalizeReadingText(v.meaning) }));
+  vocabQuizState = { total: 0, correct: 0, mastered: 0 };
+  currentQuizTarget = null;
+}
+
 function renderVocabTools() {
-  const vocab = dbLoadedVocab;
+  const vocab = dbLoadedVocab.filter(v => v.word && v.meaning);
   if (!vocab.length) {
     el.vocabFlashcard.textContent = 'Chưa có vocab từ DB hôm nay. Hãy generate rồi sync lại.';
     el.vocabPractice.innerHTML = '';
     el.vocabQuizScore.textContent = '';
     return;
   }
-  el.vocabQuizScore.textContent = `Điểm quiz: ${vocabQuizState.correct}/${vocabQuizState.total}`;
+  if (!vocabQuizPool.length) startVocabQuizRound();
+  el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${vocab.length} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
   renderOneVocabQuestion();
 }
 
-function renderOneVocabQuestion() {
-  const vocab = dbLoadedVocab;
-  if (!vocab.length) return;
-  const target = vocab[Math.floor(Math.random() * vocab.length)];
-  const options = [target.meaning];
-  while (options.length < Math.min(4, vocab.length)) {
-    const candidate = vocab[Math.floor(Math.random() * vocab.length)].meaning;
-    if (!options.includes(candidate)) options.push(candidate);
-  }
-  options.sort(() => Math.random() - 0.5);
+function pickRandomQuizTarget() {
+  if (!vocabQuizPool.length) return null;
+  return vocabQuizPool[Math.floor(Math.random() * vocabQuizPool.length)];
+}
 
-  el.vocabPractice.innerHTML = `<p><strong>Chọn nghĩa đúng của từ:</strong> ${sanitize(target.word)}</p><div class="options">${options.map(o => `<button class="option" data-correct="${o === target.meaning}">${sanitize(o)}</button>`).join('')}</div>`;
+function removeMasteredTarget(target) {
+  if (!target) return;
+  vocabQuizPool = vocabQuizPool.filter(v => v.key !== target.key);
+  vocabQuizState.mastered += 1;
+}
+
+function markUnknownTarget(target) {
+  if (!target) return;
+  vocabQuizPool = vocabQuizPool.filter(v => v.key !== target.key);
+  vocabQuizPool.push(target);
+}
+
+function renderOneVocabQuestion() {
+  const vocab = dbLoadedVocab.filter(v => v.word && v.meaning);
+  if (vocab.length < 4) {
+    el.vocabPractice.innerHTML = '<p class="muted">Cần ít nhất 4 từ vựng để làm quiz trắc nghiệm.</p>';
+    el.vocabPracticeResult.textContent = '';
+    return;
+  }
+  if (!vocabQuizPool.length) {
+    el.vocabPractice.innerHTML = '<p><strong>🎉 Bạn đã thuộc hết vòng quiz hiện tại.</strong> Bấm "Bắt đầu/Đổi vòng quiz" để luyện lại từ đầu.</p>';
+    el.vocabPracticeResult.textContent = 'Hoàn thành: tất cả từ đã trả lời đúng ít nhất 1 lần.';
+    currentQuizTarget = null;
+    return;
+  }
+
+  const target = pickRandomQuizTarget();
+  currentQuizTarget = target;
+  const targetMeaning = String(target.meaning || '').trim();
+  const distractors = [...new Set(vocab
+    .filter(v => normalizeReadingText(v.word) !== normalizeReadingText(target.word))
+    .map(v => String(v.meaning || '').trim())
+    .filter(m => m && normalizeReadingText(m) !== normalizeReadingText(targetMeaning)))].sort(() => Math.random() - 0.5).slice(0, 3);
+
+  const options = [...distractors, targetMeaning].sort(() => Math.random() - 0.5);
+  el.vocabPractice.innerHTML = `<p><strong>Chọn nghĩa đúng (1 đáp án):</strong> ${sanitize(target.word)}</p><div class="options">${options.map(o => `<button class="option" data-correct="${normalizeReadingText(o) === normalizeReadingText(targetMeaning)}">${sanitize(o)}</button>`).join('')}</div>`;
   el.vocabPracticeResult.textContent = '';
 
   const buttons = [...el.vocabPractice.querySelectorAll('button')];
@@ -627,11 +702,17 @@ function renderOneVocabQuestion() {
     buttons.forEach(b => b.disabled = true);
     vocabQuizState.total += 1;
     const isCorrect = btn.dataset.correct === 'true';
-    if (isCorrect) vocabQuizState.correct += 1;
-    el.vocabQuizScore.textContent = `Điểm quiz: ${vocabQuizState.correct}/${vocabQuizState.total}`;
+    if (isCorrect) {
+      vocabQuizState.correct += 1;
+      removeMasteredTarget(target);
+    } else {
+      markUnknownTarget(target);
+    }
+    el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${vocab.length} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
     el.vocabPracticeResult.textContent = isCorrect
-      ? `✅ Chính xác! Ví dụ: ${sanitize(target.example)}`
-      : `❌ Chưa đúng. Đáp án: ${sanitize(target.meaning)}`;
+      ? `✅ Chính xác! Ví dụ: ${sanitize(target.example || '')}`
+      : `❌ Chưa đúng. Đáp án: ${sanitize(targetMeaning)} (từ này sẽ quay lại)`;
+    setTimeout(renderOneVocabQuestion, 450);
   }));
 }
 
@@ -735,7 +816,15 @@ el.vocabFlashNext?.addEventListener('click', nextFlashcard);
 el.vocabFlashToggle?.addEventListener('click', toggleFlashMeaning);
 el.checkGrammar?.addEventListener('click', checkGrammarAnswers);
 
-el.vocabQuizNext?.addEventListener('click', renderOneVocabQuestion);
+el.vocabQuizNext?.addEventListener('click', () => { startVocabQuizRound(); renderVocabTools(); });
+el.vocabQuizUnknown?.addEventListener('click', () => {
+  if (!currentQuizTarget) return;
+  vocabQuizState.total += 1;
+  markUnknownTarget(currentQuizTarget);
+  el.vocabPracticeResult.textContent = 'Đã đánh dấu CHƯA BIẾT. Từ này sẽ lặp lại ở lượt sau.';
+  el.vocabQuizScore.textContent = `Tiến độ quiz: Thuộc ${vocabQuizState.mastered}/${dbLoadedVocab.filter(v => v.word && v.meaning).length} | Lượt: ${vocabQuizState.total} | Đúng: ${vocabQuizState.correct}`;
+  setTimeout(renderOneVocabQuestion, 300);
+});
 
 
 async function currentUser() {
