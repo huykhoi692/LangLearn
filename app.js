@@ -414,7 +414,7 @@ function maybeSaveReadingDraftNote() {
     if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Từ "${word}" đã tồn tại, hãy tự chọn giữ bản nào.`;
     return;
   }
-  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: false, mastered: false, source: 'selection' });
+  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: cloudOnlyMode, mastered: false, source: 'selection' });
   state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   renderReadingNotebook();
@@ -458,12 +458,13 @@ function saveReadingWord() {
   if (!word || !meaning) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Nhập theo mẫu: word | nghĩa | ví dụ'; return; }
   const existed = state.readingNotes.find(n => n.word.toLowerCase() === word.toLowerCase());
   if (existed) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Từ "${word}" đã tồn tại, hãy tự chọn giữ bản nào.`; return; }
-  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: false, mastered: false, source: 'manual' });
+  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: cloudOnlyMode, mastered: false, source: 'manual' });
   state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   el.readingVocabInput.value = '';
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Đã thêm note vào notebook. Tick "Lưu vào DB" để đồng bộ.';
   renderReadingNotebook();
+  if (cloudOnlyMode) upsertReadingNoteToSupabase(state.readingNotes[0]).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
 }
 
 function renderStats() {
