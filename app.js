@@ -414,10 +414,11 @@ function maybeSaveReadingDraftNote() {
     if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Từ "${word}" đã tồn tại, hãy tự chọn giữ bản nào.`;
     return;
   }
-  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: false, mastered: false, source: 'selection' });
+  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: cloudOnlyMode, mastered: false, source: 'selection' });
   state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   renderReadingNotebook();
+  if (cloudOnlyMode) upsertReadingNoteToSupabase(state.readingNotes[0]).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu note "${word}".`;
 }
 
@@ -458,12 +459,13 @@ function saveReadingWord() {
   if (!word || !meaning) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Nhập theo mẫu: word | nghĩa | ví dụ'; return; }
   const existed = state.readingNotes.find(n => n.word.toLowerCase() === word.toLowerCase());
   if (existed) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Từ "${word}" đã tồn tại, hãy tự chọn giữ bản nào.`; return; }
-  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: false, mastered: false, source: 'manual' });
+  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: cloudOnlyMode, mastered: false, source: 'manual' });
   state.readingNotes = state.readingNotes.slice(0, 200);
   save();
   el.readingVocabInput.value = '';
-  if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Đã thêm note. Tick "Lưu vào DB" nếu muốn đồng bộ.';
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = cloudOnlyMode ? 'Đã thêm note và tự đồng bộ DB.' : 'Đã thêm note. Tick "Lưu vào DB" nếu muốn đồng bộ.';
   renderReadingNotebook();
+  if (cloudOnlyMode) upsertReadingNoteToSupabase(state.readingNotes[0]).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
 }
 
 function renderStats() {
@@ -839,13 +841,30 @@ async function upsertReadingNoteToSupabase(note) {
     topic: 'reading_note',
     is_mastered: !!note.mastered
   };
-  const { data: existed } = await supa.from('vocab_items').select('id').eq('user_id', user.id).eq('word', row.word).limit(1);
-  if (existed?.length && el.readingNoteStatus) {
-    el.readingNoteStatus.textContent = `Từ "${row.word}" đã tồn tại trong DB, bạn hãy tự quyết định giữ bản nào.`;
-    return;
+  const { data: existed, error: findErr } = await supa
+    .from('vocab_items')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('topic', 'reading_note')
+    .eq('word', row.word)
+    .limit(1);
+  if (findErr) throw new Error('Kiểm tra note DB lỗi: ' + findErr.message);
+
+  if (existed?.length) {
+    const { error: updateErr } = await supa
+      .from('vocab_items')
+      .update({
+        meaning: row.meaning,
+        example: row.example,
+        is_mastered: row.is_mastered,
+        study_date: row.study_date
+      })
+      .eq('id', existed[0].id);
+    if (updateErr) throw new Error('Cập nhật note DB lỗi: ' + updateErr.message);
+  } else {
+    const { error: insertErr } = await supa.from('vocab_items').insert(row);
+    if (insertErr) throw new Error('Lưu note vào DB lỗi: ' + insertErr.message);
   }
-  const { error } = await supa.from('vocab_items').upsert(row, { onConflict: 'user_id,study_date,word' });
-  if (error) throw new Error('Lưu note vào DB lỗi: ' + error.message);
   if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu "${row.word}" vào DB.`;
 }
 
