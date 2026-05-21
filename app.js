@@ -405,6 +405,20 @@ function hideReadingTranslateTooltip() {
   readingDraftNote = null;
 }
 
+function createReadingNote(word, meaning, example, source = 'manual') {
+  const w = String(word || '').trim();
+  const m = String(meaning || '').trim();
+  const ex = String(example || '').trim();
+  if (!w || !m) return { ok: false, msg: 'Thiếu từ hoặc nghĩa.' };
+  const existed = state.readingNotes.find(n => n.word.toLowerCase() === w.toLowerCase());
+  if (existed) return { ok: false, msg: `Từ "${w}" đã tồn tại, hãy tự chọn giữ bản nào.` };
+  state.readingNotes.unshift({ id: crypto.randomUUID(), word: w, meaning: m, example: ex, selectedForDb: false, mastered: false, source });
+  state.readingNotes = state.readingNotes.slice(0, 200);
+  save();
+  renderReadingNotebook();
+  return { ok: true, msg: `Đã lưu note "${w}" vào notebook. Tick "Lưu vào DB" để đồng bộ.` };
+}
+
 function showReadingTranslateTooltip(html, x, y) {
   if (!el.readingTranslateTooltip) return;
   const pad = 12;
@@ -425,16 +439,8 @@ function maybeSaveReadingDraftNote() {
   const meaning = (meaningEl?.value || '').trim();
   const example = (exampleEl?.value || '').trim();
   if (!word || !meaning) return;
-  const existed = state.readingNotes.find(n => n.word.toLowerCase() === word.toLowerCase());
-  if (existed) {
-    if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Từ "${word}" đã tồn tại, hãy tự chọn giữ bản nào.`;
-    return;
-  }
-  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: cloudOnlyMode, mastered: false, source: 'selection' });
-  state.readingNotes = state.readingNotes.slice(0, 200);
-  save();
-  renderReadingNotebook();
-  if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Đã lưu note "${word}" vào notebook. Tick "Lưu vào DB" để đồng bộ.`;
+  const result = createReadingNote(word, meaning, example, 'selection');
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = result.msg;
 }
 
 function showReadingNotePopover(word, x, y) {
@@ -444,8 +450,12 @@ function showReadingNotePopover(word, x, y) {
     <label>Từ/cụm từ<input id="reading-note-word" value="${sanitize(word)}" /></label>
     <label>Nghĩa<input id="reading-note-meaning" placeholder="Nhập nghĩa tiếng Việt" /></label>
     <label>Ví dụ<input id="reading-note-example" placeholder="Ví dụ ngắn (tuỳ chọn)" /></label>
-    <small class="muted">Click ra ngoài để lưu note.</small>
+    <div class="row"><button id="reading-note-confirm" class="ghost" type="button">Lưu note</button></div><small class="muted">Bạn có thể bấm nút Lưu note hoặc click ra ngoài để lưu.</small>
   `, x, y);
+  document.getElementById('reading-note-confirm')?.addEventListener('click', () => {
+    maybeSaveReadingDraftNote();
+    hideReadingTranslateTooltip();
+  });
 }
 
 async function translateSelectedReadingText() {
@@ -472,15 +482,9 @@ function saveReadingWord() {
   if (!raw) return;
   const [word, meaning = '', example = ''] = raw.split('|').map(x => x.trim());
   if (!word || !meaning) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Nhập theo mẫu: word | nghĩa | ví dụ'; return; }
-  const existed = state.readingNotes.find(n => n.word.toLowerCase() === word.toLowerCase());
-  if (existed) { if (el.readingNoteStatus) el.readingNoteStatus.textContent = `Từ "${word}" đã tồn tại, hãy tự chọn giữ bản nào.`; return; }
-  state.readingNotes.unshift({ id: crypto.randomUUID(), word, meaning, example, selectedForDb: cloudOnlyMode, mastered: false, source: 'manual' });
-  state.readingNotes = state.readingNotes.slice(0, 200);
-  save();
+  const result = createReadingNote(word, meaning, example, 'manual');
   el.readingVocabInput.value = '';
-  if (el.readingNoteStatus) el.readingNoteStatus.textContent = 'Đã thêm note vào notebook. Tick "Lưu vào DB" để đồng bộ.';
-  renderReadingNotebook();
-  if (cloudOnlyMode) upsertReadingNoteToSupabase(state.readingNotes[0]).catch((err) => { if (el.readingNoteStatus) el.readingNoteStatus.textContent = err.message; });
+  if (el.readingNoteStatus) el.readingNoteStatus.textContent = result.msg;
 }
 
 function renderStats() {
@@ -674,6 +678,18 @@ function checkGrammarAnswers() {
   el.grammarResult.textContent = `Bạn đúng ${correct}/${grammar.length} câu. Gợi ý: xem lại phần đáp án ở box Grammar drills.`;
 }
 
+
+function setupTabs() {
+  const buttons = [...document.querySelectorAll('.tab-btn')];
+  const panes = [...document.querySelectorAll('.tab-pane')];
+  const activate = (name) => {
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    panes.forEach(p => p.classList.toggle('active', p.dataset.tabPane === name));
+  };
+  buttons.forEach(b => b.addEventListener('click', () => activate(b.dataset.tab)));
+  activate('dashboard');
+}
+
 function init() {
   if (window.location.protocol === 'file:') {
     el.genStatus.textContent = 'Bạn đang mở bằng file:// nên có thể gặp lỗi bảo mật khi gọi API. Hãy chạy: python3 -m http.server 8000 rồi mở http://localhost:8000';
@@ -688,6 +704,7 @@ function init() {
   renderReadingNotebook();
   renderVocabTools();
   renderGrammarTools();
+  setupTabs();
 }
 
 async function bootstrap() {
