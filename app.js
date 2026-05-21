@@ -325,6 +325,31 @@ function toggleReadingPassage() {
   p.style.display = p.style.display === 'none' ? '' : 'none';
 }
 
+
+
+function mergeReadingNotes(list = []) {
+  const merged = [];
+  const seen = new Set();
+  list.forEach((n) => {
+    const word = String(n.word || '').trim();
+    const meaning = String(n.meaning || '').trim();
+    if (!word || !meaning) return;
+    const key = word.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push({
+      id: n.id || crypto.randomUUID(),
+      word,
+      meaning,
+      example: String(n.example || '').trim(),
+      selectedForDb: !!n.selectedForDb,
+      mastered: !!n.mastered,
+      source: n.source || 'db'
+    });
+  });
+  state.readingNotes = merged.slice(0, 500);
+}
+
 function renderReadingNotebook() {
   el.readingWordList.innerHTML = (state.readingNotes || []).map((n, i) => `
     <li class="vocab-item">
@@ -654,6 +679,8 @@ async function bootstrap() {
   if (cloudOnlyMode) save();
   init();
   await loadTodayFromSupabase();
+  await loadAllReadingNotesFromSupabase().catch(() => {});
+  renderReadingNotebook();
   if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); renderStats(); renderVocabTools(); renderGrammarTools(); }
 }
 bootstrap();
@@ -773,6 +800,33 @@ async function loadTodayVocabGrammarFromSupabase() {
   dbLoadedGrammar = (grammarData || []).map(g => ({ point: g.point, exercise: g.exercise, answer: g.answer }));
 }
 
+
+
+async function loadAllReadingNotesFromSupabase() {
+  const user = await currentUser();
+  if (!user) return;
+  const { data, error } = await supa
+    .from('vocab_items')
+    .select('id,word,meaning,example,is_mastered,study_date')
+    .eq('user_id', user.id)
+    .eq('topic', 'reading_note')
+    .order('study_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw new Error('Load reading note lỗi: ' + error.message);
+  const localNotes = state.readingNotes || [];
+  const dbNotes = (data || []).map((row) => ({
+    id: row.id || crypto.randomUUID(),
+    word: row.word,
+    meaning: row.meaning,
+    example: row.example,
+    selectedForDb: true,
+    mastered: !!row.is_mastered,
+    source: 'db'
+  }));
+  mergeReadingNotes([...localNotes, ...dbNotes]);
+  save();
+}
+
 async function upsertReadingNoteToSupabase(note) {
   const user = await currentUser();
   if (!user || !note.selectedForDb) return;
@@ -818,6 +872,8 @@ el.authLogin?.addEventListener('click', async () => {
   el.authStatus.textContent = 'Đăng nhập thành công ✅ cloud-only mode đang bật...';
   try {
     await loadTodayFromSupabase();
+    await loadAllReadingNotesFromSupabase().catch(() => {});
+    renderReadingNotebook();
     if (state.days[dateKey].plan) { await loadTodayVocabGrammarFromSupabase().catch(() => {}); renderPlan(state.days[dateKey].plan); renderChecklist(); await renderStatsCloudFirst(); renderVocabTools(); renderGrammarTools(); }
     el.authStatus.textContent = 'Đăng nhập thành công ✅ (cloud-only, local chỉ giữ API key/model)';
   } catch (e) {
