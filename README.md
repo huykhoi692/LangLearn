@@ -6,7 +6,7 @@ App học IELTS/TOEIC có AI sinh dữ liệu học **đủ 1 ngày** cho:
 - Speaking (câu hỏi + AI chấm)
 - Writing (đề bài + AI chấm)
 - Vocabulary (12 từ/ngày)
-- Grammar (8 bài/ngày)
+- Grammar (3-5 cấu trúc/ngày, mỗi cấu trúc 5 bài tập)
 
 ## Điểm chính
 - Có ô nhập API key để thay key khi hết quota.
