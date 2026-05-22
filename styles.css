@@ -175,3 +175,27 @@ a{color:#2563eb}
 .listening-card textarea#listening-note{min-height:92px}
 
 .grammar-theory-item span{line-height:1.5;color:#334155}
+
+/* ── Quota badges (Sprint 1) ──────────────────────────────────────────────── */
+.quota-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: .35rem;
+  padding: .1rem .4rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 700;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+.quota-badge.free {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+.quota-badge.ai {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+/* ── End quota badges ─────────────────────────────────────────────────────── */

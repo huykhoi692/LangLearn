@@ -1,3 +1,50 @@
+// ─── Safety Utilities (Sprint 1) ─────────────────────────────────────────────
+
+/**
+ * Safely parse JSON. On error, logs a console warning and returns fallback.
+ * Prevents app crash when localStorage is corrupted.
+ */
+function safeJsonParse(raw, fallback = {}) {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== 'object') return fallback;
+    return parsed;
+  } catch (_) {
+    console.warn('[LangLearn] safeJsonParse: JSON lỗi, dùng fallback.', String(raw).slice(0, 120));
+    return fallback;
+  }
+}
+
+/**
+ * Validate a URL string. Returns fallback ('#') for invalid or non-http(s) URLs.
+ * Prevents XSS / broken links from AI-generated content.
+ */
+function safeUrl(value, fallback = '#') {
+  try {
+    const url = new URL(String(value || '').trim());
+    if (!['http:', 'https:'].includes(url.protocol)) return fallback;
+    return url.href;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+/**
+ * fetch() with an AbortController timeout. Default 30 seconds.
+ * Prevents UI from freezing when Gemini API hangs.
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ─── End Safety Utilities ────────────────────────────────────────────────────
+
 const KEY = 'langlearn_ai_daily_v4';
 function getLocalDateKey(date = new Date()) {
   const y = date.getFullYear();
@@ -94,7 +141,7 @@ const el = {
   heroPhase: document.getElementById('hero-phase')
 };
 
-let state = JSON.parse(localStorage.getItem(KEY) || '{}');
+let state = safeJsonParse(localStorage.getItem(KEY), {});
 if (!state.settings) state.settings = { apiKey: '', model: 'gemini-1.5-flash' };
 if (!state.days) state.days = {};
 if (!state.days[dateKey]) state.days[dateKey] = { plan: null, tasks: [] };
@@ -102,6 +149,10 @@ if (!state.phase) state.phase = 'phase1';
 if (!state.readingNotebook) state.readingNotebook = [];
 if (!state.readingNotes) state.readingNotes = [];
 if (!state.days[dateKey].listening) state.days[dateKey].listening = { openedVideo: false, listened10Min: false, captured3Phrases: false, note: '' };
+// Sprint 2: migrate new state fields without deleting old data
+if (!state.goal) state.goal = { examMode: 'foundation', targetScore: '', dailyMinutes: 60, level: 'B1' };
+if (!state.errorNotebook) state.errorNotebook = [];
+if (!state.days[dateKey].aiCache) state.days[dateKey].aiCache = { readingDrill: null, writingFeedback: {}, speakingFeedback: {} };
 let cloudOnlyMode = false;
 let readingTranslateEnabled = false;
 let readingDraftNote = null;
@@ -109,24 +160,27 @@ let globalEventsBound = false;
 let questCelebratedDate = null;
 let lastReadingSelectionText = "";
 let grammarDatasetCache = null;
+let localGrammarItems = []; // Sprint 2: grammar drills from local dataset (populated by initLocalGrammarFromDataset)
 let readingPopoverOpen = false;
 let readingSelectionTimer = null;
 let readingPopoverOpenedAt = 0;
 
 function save() {
-  const fullState = JSON.parse(localStorage.getItem(KEY) || '{}');
+  const fullState = safeJsonParse(localStorage.getItem(KEY), {});
   fullState.settings = state.settings;
   fullState.phase = state.phase;
   fullState.days = state.days;
   fullState.readingNotebook = state.readingNotebook || [];
   fullState.readingNotes = state.readingNotes || [];
+  fullState.goal = state.goal || { examMode: 'foundation', targetScore: '', dailyMinutes: 60, level: 'B1' }; // Sprint 2
+  fullState.errorNotebook = state.errorNotebook || []; // Sprint 2
   if (state._userId) fullState._userId = state._userId;
   else delete fullState._userId;
   localStorage.setItem(KEY, JSON.stringify(fullState));
 }
 
 function saveLocalUiState() {
-  const fullState = JSON.parse(localStorage.getItem(KEY) || '{}');
+  const fullState = safeJsonParse(localStorage.getItem(KEY), {});
   fullState.phase = state.phase;
   fullState.days = state.days;
   localStorage.setItem(KEY, JSON.stringify(fullState));
@@ -163,17 +217,31 @@ function renderPhaseNote() {
 async function callGemini(prompt) {
   const apiKey = state.settings.apiKey;
   const model = state.settings.model || 'gemini-1.5-flash';
-  if (!apiKey) throw new Error('Chưa có API key');
+  if (!apiKey) throw new Error('Chưa có API key. Vào tab Cài đặt để nhập Gemini API key.');
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { response_mime_type: 'application/json', temperature: 0.7 }
-    })
-  });
+  const url = safeUrl(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
+    null
+  );
+  if (!url) throw new Error('URL API không hợp lệ. Kiểm tra lại model name.');
+
+  let res;
+  try {
+    res = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { response_mime_type: 'application/json', temperature: 0.7 }
+      })
+    }, 30000);
+  } catch (fetchErr) {
+    if (fetchErr?.name === 'AbortError') {
+      throw new Error('Gemini API không phản hồi sau 30 giây. Kiểm tra kết nối mạng rồi thử lại.');
+    }
+    throw new Error('Không thể kết nối Gemini API: ' + fetchErr.message);
+  }
+
   if (!res.ok) {
     let detail = '';
     try {
@@ -185,10 +253,24 @@ async function callGemini(prompt) {
     }
     throw new Error(`API lỗi ${res.status}${detail ? `: ${detail}` : ''}`);
   }
-  const data = await res.json();
+
+  let data;
+  try {
+    data = await res.json();
+  } catch (_) {
+    throw new Error('Gemini trả về dữ liệu không đọc được. Hãy thử lại.');
+  }
+
   const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
   const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  return JSON.parse(text || '{}');
+
+  // Gemini response parse guard: never crash on malformed JSON from AI
+  try {
+    return JSON.parse(text || '{}');
+  } catch (_) {
+    console.warn('[LangLearn] callGemini: AI trả JSON không hợp lệ:', text.slice(0, 200));
+    throw new Error('AI trả dữ liệu không phải JSON hợp lệ. Hãy thử lại.');
+  }
 }
 
 
@@ -254,6 +336,108 @@ async function getGrammarTrackForToday() {
     }))
   };
 }
+
+// ─── Sprint 2: Local Grammar from Dataset ────────────────────────────────────
+
+/**
+ * Create a simple fill-in-the-blank exercise from an example sentence.
+ * Blanks the 2nd word (index 1) which is typically the verb in SVO sentences.
+ * Returns { exercise, answer } where answer is the blanked word (lowercased,
+ * punctuation stripped).
+ */
+function makeBlankDrill(sentence) {
+  const words = String(sentence || '').trim().split(/\s+/);
+  if (words.length < 3) return { exercise: sentence, answer: sentence.toLowerCase() };
+  const raw = words[1];
+  const answer = raw.replace(/[.,!?;:'"]+$/, '').toLowerCase();
+  const display = [...words];
+  display[1] = '___';
+  return { exercise: display.join(' '), answer };
+}
+
+/**
+ * Convert dataset lessons (from getGrammarTrackForToday track items) into
+ * the { point, theory, exercise, answer } format expected by normalizeGrammarEntries.
+ * Produces up to 2 drill items per lesson (one per example sentence, max 2).
+ */
+function convertDatasetLessonsToGrammarItems(trackItems) {
+  const items = [];
+  for (const item of trackItems) {
+    const g = item.grammar || {};
+    const point = String(g.point || item.titleVi || '').trim();
+    const theory = String(g.explanation || '').trim();
+    const examples = Array.isArray(g.examples) ? g.examples : [];
+    if (!point) continue;
+    const drillSources = examples.slice(0, 2);
+    if (drillSources.length) {
+      drillSources.forEach(ex => {
+        const { exercise, answer } = makeBlankDrill(ex);
+        if (exercise && answer) items.push({ point, theory, exercise, answer });
+      });
+    } else {
+      // Fallback: use first structure as the exercise text
+      const structures = Array.isArray(g.structures) ? g.structures : [];
+      const ex = structures[0] || point;
+      items.push({ point, theory, exercise: `Cấu trúc: ${ex}. Viết lại một ví dụ.`, answer: ex });
+    }
+  }
+  return items;
+}
+
+/**
+ * Load grammar dataset → pick today's track → convert to drill items → store in localGrammarItems.
+ * Called once from bootstrap(). Safe to fail silently (catch outside).
+ */
+async function initLocalGrammarFromDataset() {
+  const trackData = await getGrammarTrackForToday();
+  localGrammarItems = convertDatasetLessonsToGrammarItems(trackData.track || []);
+}
+
+// ─── End Sprint 2: Local Grammar from Dataset ─────────────────────────────────
+
+// ─── Sprint 2: Local Daily Plan ──────────────────────────────────────────────
+
+const DAILY_TASK_TEMPLATES = {
+  foundation: [
+    { skill: 'reading',   label: 'Short Reading',      duration: 20 },
+    { skill: 'listening', label: 'Listening Routine',   duration: 15 },
+    { skill: 'vocabulary',label: 'Core Vocabulary',     duration: 15 },
+    { skill: 'grammar',   label: 'Grammar Drill',       duration: 15 },
+    { skill: 'speaking',  label: 'Speaking Prep',       duration: 15 },
+    { skill: 'writing',   label: 'Short Writing',       duration: 20 }
+  ],
+  ielts: [
+    { skill: 'reading',   label: 'IELTS Reading Drill',      duration: 25 },
+    { skill: 'listening', label: 'IELTS Listening Routine',  duration: 20 },
+    { skill: 'vocabulary',label: 'Academic Vocabulary',      duration: 15 },
+    { skill: 'grammar',   label: 'Grammar for Writing',      duration: 15 },
+    { skill: 'speaking',  label: 'Speaking Part 1/2 Prep',   duration: 20 },
+    { skill: 'writing',   label: 'Writing Task 2 Prep',      duration: 30 }
+  ],
+  toeic: [
+    { skill: 'reading',   label: 'TOEIC Part 5/6/7 Drill',  duration: 25 },
+    { skill: 'listening', label: 'TOEIC Listening Routine',  duration: 20 },
+    { skill: 'vocabulary',label: 'Business Vocabulary',      duration: 15 },
+    { skill: 'grammar',   label: 'Grammar for TOEIC',        duration: 15 },
+    { skill: 'speaking',  label: 'Workplace Speaking Prep',  duration: 15 },
+    { skill: 'writing',   label: 'Email Sentence Writing',   duration: 20 }
+  ]
+};
+
+/** Generate a daily plan locally — NO AI call. */
+function generateLocalDailyPlan(goal) {
+  const mode = goal?.examMode || 'foundation';
+  const template = DAILY_TASK_TEMPLATES[mode] || DAILY_TASK_TEMPLATES.foundation;
+  return {
+    source: 'local',
+    examMode: mode,
+    level: goal?.level || 'B1',
+    createdAt: new Date().toISOString(),
+    checklist: template.map(t => ({ ...t, done: false }))
+  };
+}
+
+// ─── End Sprint 2: Local Daily Plan ──────────────────────────────────────────
 
 async function generateDailyPlan() {
   const level = getDifficultyLevel();
@@ -343,9 +527,10 @@ function getListeningState() {
 
 function renderPlan(plan) {
   el.readingBox.innerHTML = `<h3>${sanitize(plan.reading.title)}</h3><p>${sanitize(plan.reading.passage)}</p><ol>${plan.reading.questions.map(q => `<li>${sanitize(q)}</li>`).join('')}</ol>`;
-  const directUrl = (plan.listening.youtubeUrl || '').trim();
+  const directUrl = safeUrl((plan.listening.youtubeUrl || '').trim());
   const query = encodeURIComponent(plan.listening.youtubeQuery || 'english listening practice');
-  const link = directUrl || `https://www.youtube.com/results?search_query=${query}`;
+  const fallbackUrl = `https://www.youtube.com/results?search_query=${query}`;
+  const link = (directUrl !== '#' ? directUrl : null) || fallbackUrl;
   const lState = getListeningState();
   const listeningDone = [lState.openedVideo, lState.listened10Min, lState.captured3Phrases].filter(Boolean).length;
   el.listeningBox.innerHTML = `<div class="youtube-card"><p><strong>🎬 ${sanitize(plan.listening.title)}</strong></p><p class="mini-progress">Listening routine: ${listeningDone}/3 bước</p><a class="yt-link" target="_blank" href="${sanitize(link)}">Mở YouTube Practice ↗</a><p class="muted">Nhiệm vụ: ${sanitize(plan.listening.task)}</p><div class="checklist">
@@ -427,7 +612,7 @@ function renderHeroCta() {
   const next = (day.tasks || []).find(t => !t.done);
   if (el.coachMessage) el.coachMessage.textContent = getCoachMessage(day);
   if (!day.tasks?.length) {
-    cta.innerHTML = '<button id="generate-plan" class="btn-primary">Tạo kế hoạch hôm nay</button>';
+    cta.innerHTML = '<button id="generate-plan" class="btn-primary">Tạo kế hoạch hôm nay <span class="quota-badge free">FREE</span></button>';
     document.getElementById('generate-plan')?.addEventListener('click', handleGeneratePlan);
     return;
   }
@@ -860,7 +1045,21 @@ function checkReadingAnswers() {
 
 async function checkAnswer(skill, question, answer, outEl) {
   if (!answer.trim()) return;
-  outEl.textContent = 'Đang chấm bằng AI...';
+  // AI call guard: check API key first
+  if (!state.settings.apiKey) {
+    outEl.textContent = 'Không thể gọi AI vì chưa có Gemini API key. Bạn vẫn có thể học các phần FREE.';
+    return;
+  }
+  // AI call guard: minimum answer length
+  if (skill === 'Writing' && answer.trim().length < 50) {
+    outEl.textContent = 'Bài viết quá ngắn để chấm bằng AI. Hãy viết ít nhất 50 ký tự.';
+    return;
+  }
+  if (skill === 'Speaking' && answer.trim().length < 20) {
+    outEl.textContent = 'Câu trả lời quá ngắn. Hãy viết ít nhất 1-2 câu để AI góp ý.';
+    return;
+  }
+  outEl.textContent = '⚠️ Thao tác này sẽ dùng Gemini quota từ API key của bạn. Đang chấm bằng AI...';
   try {
     const result = await callGemini(`Bạn là giám khảo ${skill}. Câu hỏi: ${question}. Câu trả lời của học viên: ${answer}. Trả JSON: {"score":0-10,"feedback":"","fix":""}`);
     outEl.innerHTML = `<div class="report-card"><strong>${sanitize(skill)} Report</strong><div>Điểm: ${sanitize(result.score)}/10</div><div>Nhận xét: ${sanitize(result.feedback)}</div><div>Gợi ý sửa: ${sanitize(result.fix)}</div></div><span>Đã xong phần này?</span> <button class="ghost mark-skill-done" data-skill="${sanitize(skill.toLowerCase())}">Đánh dấu hoàn thành</button>`;
@@ -883,18 +1082,62 @@ el.clearApi.addEventListener('click', () => {
   el.apiStatus.textContent = 'Đã xóa API key.';
 });
 
+/**
+ * Sprint 2: Render placeholder content for a local plan (no AI content yet).
+ * Reading / Speaking / Writing content will be added in Sprint 3+.
+ */
+function renderLocalPlanUI(plan) {
+  const mode = plan?.examMode || 'foundation';
+  const modeLabels = { foundation: 'Foundation', ielts: 'IELTS', toeic: 'TOEIC' };
+  const modeLabel = modeLabels[mode] || 'Foundation';
+  const ytQuery = encodeURIComponent(`english listening practice ${modeLabel.toLowerCase()}`);
+
+  if (el.readingBox) el.readingBox.innerHTML =
+    `<p class="muted empty-state">Kế hoạch <strong>${sanitize(modeLabel)}</strong> đang dùng chế độ FREE (local). ` +
+    `Bài đọc AI sẽ được thêm ở Sprint 3 — bấm "Tạo Reading mới" khi sẵn sàng.</p>`;
+  if (el.readingQa) el.readingQa.innerHTML = '';
+  if (el.readingFeedback) el.readingFeedback.textContent = '';
+
+  if (el.listeningBox) el.listeningBox.innerHTML =
+    `<div class="youtube-card"><p><strong>🎧 Listening Routine · ${sanitize(modeLabel)}</strong></p>` +
+    `<p class="muted">Nhiệm vụ: Nghe 10–15 phút tiếng Anh, ghi lại 3 cụm từ hay.</p>` +
+    `<a class="yt-link" target="_blank" href="https://www.youtube.com/results?search_query=${ytQuery}">Tìm video trên YouTube ↗</a></div>`;
+
+  const speakingQ = mode === 'toeic'
+    ? 'Describe your ideal workplace. What makes a good work environment?'
+    : 'Tell me about something you do every day. Why is it important to you?';
+  if (el.speakingBox) el.speakingBox.innerHTML =
+    `<p><strong>💬 Speaking Prep:</strong> ${sanitize(speakingQ)}</p>` +
+    `<p class="muted">Viết câu trả lời bên dưới, sau đó bấm "Chấm Speaking" (dùng AI).</p>`;
+
+  const writingQ = mode === 'toeic'
+    ? 'Write a short business email (50–80 words) requesting a meeting.'
+    : 'Write a paragraph (50–100 words) about your daily routine and why it helps you learn.';
+  if (el.writingBox) el.writingBox.innerHTML =
+    `<p><strong>✍️ Writing:</strong> ${sanitize(writingQ)}</p>` +
+    `<p class="muted">Viết bài bên dưới, sau đó bấm "Chấm Writing" (dùng AI).</p>`;
+}
+
+/**
+ * Sprint 2: Generate plan LOCALLY (no AI). Replaces the old AI-based handler.
+ * Old generateDailyPlan() is kept intact for potential future use.
+ */
 async function handleGeneratePlan() {
-  el.genStatus.textContent = 'Đang sinh dữ liệu học hôm nay...';
+  el.genStatus.textContent = 'Đang tạo kế hoạch hôm nay (FREE, không tốn quota)...';
   try {
-    const plan = await generateDailyPlan();
-    const noteBlend = applyNotesToVocabulary(plan);
+    const plan = generateLocalDailyPlan(state.goal);
     state.days[dateKey].plan = plan;
-    state.days[dateKey].tasks = (plan.checklist || []).map(t => ({ ...t, done: false }));
+    // Build task list from checklist — tasks have { label, duration, done }
+    state.days[dateKey].tasks = plan.checklist.map(t => ({ label: t.label, duration: t.duration, done: false }));
     ensureDailyTasks(state.days[dateKey]);
+    // Ensure aiCache exists on new day
+    if (!state.days[dateKey].aiCache) state.days[dateKey].aiCache = { readingDrill: null, writingFeedback: {}, speakingFeedback: {} };
     save();
-    await upsertDayToSupabase(dateKey, state.days[dateKey]);
-    await loadTodayVocabGrammarFromSupabase().catch(() => {});
-    renderPlan(plan);
+    // Sync to Supabase non-blocking (local plan has no vocab/grammar rows; upsert handles empty arrays)
+    upsertDayToSupabase(dateKey, state.days[dateKey]).catch(() => {});
+    // Refresh local grammar from dataset for the new plan day
+    initLocalGrammarFromDataset().catch(() => {});
+    renderLocalPlanUI(plan);
     renderChecklist();
     renderTodaySummary();
     renderPlanStatusBadge();
@@ -902,9 +1145,9 @@ async function handleGeneratePlan() {
     renderVocabTools();
     renderGrammarTools();
     renderNotebookReviewCard();
-    el.genStatus.textContent = `Đã sinh dữ liệu thành công ✅ (${noteBlend.usedNotes} từ từ note${noteBlend.needsFill ? ', còn lại do AI bổ sung' : ''}).`;
+    el.genStatus.textContent = 'Đã tạo kế hoạch hôm nay ✅ (FREE — không tốn Gemini quota). Học grammar/vocab ngay bên dưới!';
   } catch (e) {
-    el.genStatus.textContent = `Lỗi sinh dữ liệu: ${e.message}`;
+    el.genStatus.textContent = `Lỗi tạo kế hoạch: ${e.message}`;
   }
 }
 if (el.generatePlan) el.generatePlan.addEventListener('click', handleGeneratePlan);
@@ -928,15 +1171,57 @@ let vocabQuizPool = [];
 let currentQuizTarget = null;
 let dbLoadedVocab = [];
 let dbLoadedGrammar = [];
+
+// ─── Sprint 2: Local Vocab Fallback ──────────────────────────────────────────
+// Minimal static pool used only when no AI vocab and no reading notes are available.
+// Enough items (≥4) for flashcard + quiz to function without a plan.
+const DEFAULT_VOCAB_FALLBACK = {
+  B1: [
+    { word: 'achieve', meaning: 'đạt được (mục tiêu)', example: 'She worked hard to achieve her goals.' },
+    { word: 'benefit', meaning: 'lợi ích / có lợi cho', example: 'Regular exercise benefits your health.' },
+    { word: 'consider', meaning: 'cân nhắc, xem xét', example: 'Please consider all the options before deciding.' },
+    { word: 'describe', meaning: 'mô tả', example: 'Can you describe what happened?' },
+    { word: 'evidence', meaning: 'bằng chứng', example: 'There is no evidence to support that claim.' },
+    { word: 'focus', meaning: 'tập trung (vào)', example: 'Focus on one task at a time.' },
+    { word: 'improve', meaning: 'cải thiện', example: 'You can improve your English by reading every day.' },
+    { word: 'necessary', meaning: 'cần thiết', example: 'It is necessary to practice speaking regularly.' }
+  ],
+  B2: [
+    { word: 'acknowledge', meaning: 'thừa nhận, công nhận', example: 'He acknowledged his mistake and apologised.' },
+    { word: 'consequence', meaning: 'hệ quả, kết quả', example: 'Every decision has consequences.' },
+    { word: 'contribute', meaning: 'đóng góp', example: 'Volunteers contribute greatly to the community.' },
+    { word: 'elaborate', meaning: 'trình bày chi tiết', example: 'Could you elaborate on that point?' },
+    { word: 'fundamental', meaning: 'cơ bản, căn bản', example: 'Grammar is fundamental to good writing.' },
+    { word: 'interpret', meaning: 'giải thích, diễn giải', example: 'How do you interpret this sentence?' },
+    { word: 'significant', meaning: 'đáng kể, quan trọng', example: 'There has been a significant improvement.' },
+    { word: 'whereas', meaning: 'trong khi đó', example: 'He prefers coffee, whereas she likes tea.' }
+  ]
+};
+
 function getTodayVocab() {
+  // Priority 1: vocab synced from Supabase DB
   const fromDb = dbLoadedVocab.filter(v => v.word && v.meaning);
   if (fromDb.length) return fromDb;
-  return (state.days[dateKey]?.plan?.vocabulary || []).filter(v => v.word && v.meaning);
+  // Priority 2: vocab from AI plan
+  const fromPlan = (state.days[dateKey]?.plan?.vocabulary || []).filter(v => v.word && v.meaning);
+  if (fromPlan.length) return fromPlan;
+  // Sprint 2 Priority 3: unmastered reading notes (need ≥4 for quiz to work)
+  const fromNotes = getUnmasteredReadingNotes().map(n => ({ word: n.word, meaning: n.meaning, example: n.example || '' }));
+  if (fromNotes.length >= 4) return fromNotes;
+  // Sprint 2 Priority 4: static fallback pool by level (pad with notes if any)
+  const level = state.goal?.level === 'B2' ? 'B2' : 'B1';
+  const pool = DEFAULT_VOCAB_FALLBACK[level] || DEFAULT_VOCAB_FALLBACK.B1;
+  const combined = [...fromNotes, ...pool.filter(p => !fromNotes.find(n => n.word === p.word))];
+  return combined.slice(0, 12);
 }
+// ─── End Sprint 2: Local Vocab Fallback ───────────────────────────────────────
 function getTodayGrammar() {
   const fromDb = normalizeGrammarEntries(dbLoadedGrammar);
   if (fromDb.length) return fromDb;
-  return normalizeGrammarEntries(state.days[dateKey]?.plan?.grammar || []);
+  const fromPlan = normalizeGrammarEntries(state.days[dateKey]?.plan?.grammar || []);
+  if (fromPlan.length) return fromPlan;
+  // Sprint 2 fallback: grammar drills synthesised from local dataset
+  return localGrammarItems;
 }
 
 function normalizeGrammarEntries(grammar = []) {
@@ -975,7 +1260,7 @@ function startVocabQuizRound() {
 function renderVocabTools() {
   const vocab = getTodayVocab();
   if (!vocab.length) {
-    el.vocabFlashcard.textContent = 'Chưa có từ vựng hôm nay. Hãy tạo kế hoạch trước.';
+    el.vocabFlashcard.textContent = 'Chưa có từ vựng. Tạo kế hoạch hoặc thêm từ vào Notebook để bắt đầu.';
     el.vocabPractice.innerHTML = '';
     el.vocabQuizScore.textContent = '';
     return;
@@ -1229,7 +1514,10 @@ function init() {
   el.apiKey.value = state.settings.apiKey || '';
   if (el.phaseSelect) el.phaseSelect.value = state.phase;
   el.modelName.value = state.settings.model || 'gemini-1.5-flash';
-  if (state.days[dateKey].plan) renderPlan(state.days[dateKey].plan);
+  // Sprint 2: only call renderPlan for AI plans that have reading content
+  const _initPlan = state.days[dateKey].plan;
+  if (_initPlan?.reading) renderPlan(_initPlan);
+  else if (_initPlan) renderLocalPlanUI(_initPlan);
   ensureDailyTasks(state.days[dateKey]);
   renderChecklist();
   renderTodaySummary();
@@ -1249,15 +1537,18 @@ function init() {
 }
 
 function resetStateForNewUser(keepSettings = true) {
-  const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-  const settings = keepSettings ? (saved.settings || state.settings) : { apiKey: '', model: 'gemini-1.5-flash' };
+  const saved = safeJsonParse(localStorage.getItem(KEY), {});
+  const settings = keepSettings ? (saved.settings || state.settings) : { apiKey: '', model: 'gemini-flash-lastest' };
   localStorage.removeItem(KEY);
-  state = { settings, days: {}, phase: 'phase1', readingNotebook: [], readingNotes: [] };
+  // Sprint 2: keep goal preference (examMode/level) across account switches
+  const savedGoal = saved.goal || { examMode: 'foundation', targetScore: '', dailyMinutes: 60, level: 'B1' };
+  state = { settings, days: {}, phase: 'phase1', readingNotebook: [], readingNotes: [], goal: savedGoal, errorNotebook: [] };
   state.days[dateKey] = { plan: null, tasks: [] };
   ensureDailyTasks(state.days[dateKey]);
   // Reset in-memory DB cache để tránh hiện data của account cũ
   dbLoadedVocab = [];
   dbLoadedGrammar = [];
+  localGrammarItems = []; // Sprint 2: reset local grammar cache
   save();
 }
 
@@ -1299,13 +1590,20 @@ async function bootstrap() {
     save();
   }
 
+  // Sprint 2: preload grammar from local dataset (non-blocking)
+  initLocalGrammarFromDataset().catch(() => {});
   init();
   await loadTodayFromSupabase();
   await loadAllReadingNotesFromSupabase().catch(() => {});
   renderReadingNotebook();
   if (state.days[dateKey].plan) {
-    await loadTodayVocabGrammarFromSupabase().catch(() => {});
-    renderPlan(state.days[dateKey].plan);
+    const _bsPlan = state.days[dateKey].plan;
+    if (_bsPlan?.reading) {
+      await loadTodayVocabGrammarFromSupabase().catch(() => {});
+      renderPlan(_bsPlan);
+    } else {
+      renderLocalPlanUI(_bsPlan);
+    }
     renderChecklist();
     renderTodaySummary();
     renderNotebookReviewCard();
@@ -1583,8 +1881,13 @@ el.authLogin?.addEventListener('click', async () => {
     await loadAllReadingNotesFromSupabase().catch(() => {});
     renderReadingNotebook();
     if (state.days[dateKey].plan) {
-      await loadTodayVocabGrammarFromSupabase().catch(() => {});
-      renderPlan(state.days[dateKey].plan);
+      const _loginPlan = state.days[dateKey].plan;
+      if (_loginPlan?.reading) {
+        await loadTodayVocabGrammarFromSupabase().catch(() => {});
+        renderPlan(_loginPlan);
+      } else {
+        renderLocalPlanUI(_loginPlan);
+      }
       renderChecklist();
       renderTodaySummary();
       renderPlanStatusBadge();

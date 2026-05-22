@@ -30,7 +30,7 @@
           <p class="muted">AI Coach sẽ gợi ý việc tiếp theo để bạn học đều mỗi ngày, nhẹ quota nhưng rõ tiến bộ.</p>
           <div class="coach-line"><span class="coach-avatar" aria-hidden="true">🤖</span><p id="coach-message">Coach đang chuẩn bị quest cho bạn.</p></div>
           <div id="hero-cta-row" class="cta-row">
-            <button id="generate-plan" class="btn-primary">Tạo kế hoạch hôm nay</button>
+            <button id="generate-plan" class="btn-primary">Tạo kế hoạch hôm nay <span class="quota-badge free">FREE</span></button>
           </div>
           <div class="hero-meta"><span id="plan-status-badge" class="note-badge pending">Chưa có kế hoạch</span><p id="plan-phase-summary" class="muted"></p></div>
           <p id="gen-status" class="muted status-line"></p>
@@ -93,7 +93,7 @@
 
     <section class="card full tab-pane practice-skill reading-reader" data-tab-pane="practice" data-skill-pane="reading">
       <h2>Reading</h2><div id="reading-box"></div><div id="reading-qa" class="grammar-practice"></div>
-      <div class="row"><button id="check-reading">Chấm Reading</button></div><p id="reading-feedback" class="feedback"></p>
+      <div class="row"><button id="check-reading">Chấm Reading <span class="quota-badge free">FREE</span></button></div><p id="reading-feedback" class="feedback"></p>
     </section>
     <section class="card full tab-pane practice-skill" id="reading-tools" data-tab-pane="practice" data-skill-pane="reading">
       <details>
@@ -106,8 +106,8 @@
       </details>
     </section>
     <section class="card tab-pane practice-skill listening-card" data-tab-pane="practice" data-skill-pane="listening"><h2>Listening · Passive Mode</h2><div id="listening-box"></div></section>
-    <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="speaking"><h2>Speaking</h2><p class="muted">Chấm bằng AI sẽ dùng quota. Chỉ bấm khi bạn muốn feedback.</p><div id="speaking-box"></div><textarea id="speaking-answer" rows="4" placeholder="Nhập câu trả lời speaking..."></textarea><button id="check-speaking">Chấm Speaking</button><p id="speaking-feedback" class="feedback"></p></section>
-    <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="writing"><h2>Writing</h2><p class="muted">Chấm bằng AI sẽ dùng quota. Chỉ bấm khi bạn muốn feedback.</p><div id="writing-box"></div><textarea id="writing-answer" rows="6" placeholder="Nhập đoạn writing của bạn..."></textarea><button id="check-writing">Chấm Writing</button><p id="writing-feedback" class="feedback"></p></section>
+    <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="speaking"><h2>Speaking</h2><p class="muted">Chấm bằng AI sẽ dùng quota. Chỉ bấm khi bạn muốn feedback.</p><div id="speaking-box"></div><textarea id="speaking-answer" rows="4" placeholder="Nhập câu trả lời speaking..."></textarea><button id="check-speaking">Chấm Speaking <span class="quota-badge ai">AI</span></button><p id="speaking-feedback" class="feedback"></p></section>
+    <section class="card tab-pane practice-skill" data-tab-pane="practice" data-skill-pane="writing"><h2>Writing</h2><p class="muted">Chấm bằng AI sẽ dùng quota. Chỉ bấm khi bạn muốn feedback.</p><div id="writing-box"></div><textarea id="writing-answer" rows="6" placeholder="Nhập đoạn writing của bạn..."></textarea><button id="check-writing">Chấm Writing <span class="quota-badge ai">AI</span></button><p id="writing-feedback" class="feedback"></p></section>
 
 
     <section class="card tab-pane" data-tab-pane="notebook">
