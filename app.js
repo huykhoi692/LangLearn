@@ -67,7 +67,12 @@ const el = {
   readingHidePassage: document.getElementById('reading-hide-passage'),
   readingTranslateToggle: document.getElementById('reading-translate-toggle'),
   readingTranslateStatus: document.getElementById('reading-translate-status'),
-  readingTranslateTooltip: document.getElementById('reading-translate-tooltip'),
+  readingTranslateTooltip: (() => {
+    // Move tooltip ra body để tránh .card:hover transform làm lệch position:fixed
+    const el = document.getElementById('reading-translate-tooltip');
+    if (el) document.body.appendChild(el);
+    return el;
+  })(),
   readingKeywords: document.getElementById('reading-keywords'),
   readingNoteWordManual: document.getElementById('reading-note-word-manual'),
   readingNoteMeaningManual: document.getElementById('reading-note-meaning-manual'),
@@ -654,6 +659,7 @@ function hideReadingTranslateTooltip() {
   el.readingTranslateTooltip.innerHTML = '';
   readingDraftNote = null;
   readingPopoverOpen = false;
+  lastReadingSelectionText = ''; // reset để bôi đen lại cùng đoạn vẫn mở được popover
 }
 
 function createReadingNote(word, meaning, example, source = 'manual') {
@@ -674,11 +680,16 @@ function showReadingTranslateTooltip(html, x, y) {
   if (!el.readingTranslateTooltip) return;
   const pad = 12;
   el.readingTranslateTooltip.innerHTML = html;
+  // Measure kích thước trong khi còn invisible để tránh flicker:
+  // dùng visibility:hidden thay vì hidden=false để element có layout nhưng không hiển thị
+  el.readingTranslateTooltip.style.visibility = 'hidden';
   el.readingTranslateTooltip.hidden = false;
   const maxX = window.innerWidth - el.readingTranslateTooltip.offsetWidth - pad;
   const maxY = window.innerHeight - el.readingTranslateTooltip.offsetHeight - pad;
   el.readingTranslateTooltip.style.left = `${Math.max(pad, Math.min(x + 8, maxX))}px`;
   el.readingTranslateTooltip.style.top = `${Math.max(pad, Math.min(y + 8, maxY))}px`;
+  // Chỉ hiện sau khi đã tính xong vị trí đúng
+  el.readingTranslateTooltip.style.visibility = '';
 }
 
 function saveReadingDraftNote() {
@@ -716,6 +727,7 @@ function showReadingNotePopover(word, x, y) {
     }
   });
   document.getElementById('reading-note-cancel')?.addEventListener('click', () => {
+    window.getSelection()?.removeAllRanges(); // clear selection để popover không tự mở lại
     hideReadingTranslateTooltip();
     setReadingTranslateStatus('Đã huỷ thêm note.');
   });
@@ -1524,6 +1536,7 @@ el.readingHighlight?.addEventListener('click', applyReadingKeywordHighlight);
 el.readingHidePassage?.addEventListener('click', toggleReadingPassage);
 el.readingTranslateToggle?.addEventListener('click', toggleReadingTranslate);
 el.readingBox?.addEventListener('mouseup', () => {
+  if (!readingTranslateEnabled || readingPopoverOpen) return; // short-circuit sớm
   if (readingSelectionTimer) clearTimeout(readingSelectionTimer);
   readingSelectionTimer = setTimeout(() => { translateSelectedReadingText().catch(() => {}); }, 150);
 });
