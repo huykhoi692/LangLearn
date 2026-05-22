@@ -1352,12 +1352,28 @@ async function upsertDayToSupabase(studyDate, dayData) {
   }
 }
 
+
+function clearCurrentDayState() {
+  state.days[dateKey] = { plan: null, tasks: [] };
+  ensureDailyTasks(state.days[dateKey]);
+  getListeningState();
+  dbLoadedVocab = [];
+  dbLoadedGrammar = [];
+  save();
+}
+
 async function loadTodayFromSupabase() {
   const user = await currentUser();
-  if (!user) return false;
+  if (!user) {
+    clearCurrentDayState();
+    return false;
+  }
 
   const { data: planRow, error } = await supa.from('daily_plans').select('id,plan_json').eq('user_id', user.id).eq('study_date', dateKey).maybeSingle();
-  if (error || !planRow) return false;
+  if (error || !planRow) {
+    clearCurrentDayState();
+    return false;
+  }
   const { data: tasks } = await supa.from('daily_tasks').select('label,duration_min,is_done').eq('daily_plan_id', planRow.id).order('created_at');
 
   state.days[dateKey] = {
@@ -1383,7 +1399,11 @@ async function migrateAllLocalToSupabase() {
 
 async function loadTodayVocabGrammarFromSupabase() {
   const user = await currentUser();
-  if (!user) return;
+  if (!user) {
+    dbLoadedVocab = [];
+    dbLoadedGrammar = [];
+    return;
+  }
   const { data: vocabData, error: ve } = await supa.from('vocab_items').select('word,meaning,example,topic,is_mastered').eq('user_id', user.id).eq('study_date', dateKey);
   if (ve) throw new Error('load vocab lỗi: ' + ve.message);
   const { data: grammarData, error: ge } = await supa.from('grammar_items').select('point,theory,exercise,answer').eq('user_id', user.id).eq('study_date', dateKey);
@@ -1505,6 +1525,17 @@ el.authLogin?.addEventListener('click', async () => {
 el.authLogout?.addEventListener('click', async () => {
   await supa.auth.signOut();
   cloudOnlyMode = false;
+  clearCurrentDayState();
+  state.readingNotes = [];
+  save();
+  renderReadingNotebook();
+  renderPlanStatusBadge();
+  renderChecklist();
+  renderTodaySummary();
+  renderStats();
+  renderVocabTools();
+  renderGrammarTools();
+  renderNotebookReviewCard();
   el.authStatus.textContent = 'Đã đăng xuất.';
 });
 
