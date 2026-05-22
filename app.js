@@ -700,11 +700,11 @@ function showReadingNotePopover(word, x, y) {
   readingPopoverOpenedAt = Date.now();
   readingDraftNote = { word };
   showReadingTranslateTooltip(`
-    <div><strong>Thêm note</strong></div>
+    <div class="row" style="justify-content:space-between;align-items:center;"><strong>Thêm note</strong><button id="reading-note-cancel" class="ghost" type="button" aria-label="Đóng">✕</button></div>
     <label>Từ/cụm từ<input id="reading-note-word" value="${sanitize(word)}" /></label>
     <label>Nghĩa<input id="reading-note-meaning" placeholder="Nhập nghĩa tiếng Việt" /></label>
     <label>Ví dụ<input id="reading-note-example" placeholder="Ví dụ ngắn (tuỳ chọn)" /></label>
-    <div class="row"><button id="reading-note-confirm" class="ghost" type="button">Lưu note</button></div><small class="muted">Bạn có thể bấm nút Lưu note. Click ra ngoài để đóng popover.</small>
+    <div class="row"><button id="reading-note-confirm" class="ghost" type="button">Lưu note</button></div><small class="muted">Bấm ✕ để huỷ. Popover không tự đóng khi click ra ngoài.</small>
   `, x, y);
   document.getElementById('reading-note-confirm')?.addEventListener('click', () => {
     const result = saveReadingDraftNote();
@@ -714,6 +714,10 @@ function showReadingNotePopover(word, x, y) {
       hideReadingTranslateTooltip();
       setReadingTranslateStatus('Đã lưu note Reading.');
     }
+  });
+  document.getElementById('reading-note-cancel')?.addEventListener('click', () => {
+    hideReadingTranslateTooltip();
+    setReadingTranslateStatus('Đã huỷ thêm note.');
   });
 }
 
@@ -730,7 +734,7 @@ async function translateSelectedReadingText() {
   const rect = range.getBoundingClientRect();
   lastReadingSelectionText = normalizedText;
   showReadingNotePopover(text, rect.right, rect.bottom);
-  setReadingTranslateStatus('Đang note từ/cụm từ. Click ra ngoài để đóng popover.');
+  setReadingTranslateStatus('Đang note từ/cụm từ. Bấm ✕ để huỷ hoặc Lưu note để thêm vào danh sách.');
 }
 
 
@@ -1523,17 +1527,6 @@ el.readingBox?.addEventListener('mouseup', () => {
   if (readingSelectionTimer) clearTimeout(readingSelectionTimer);
   readingSelectionTimer = setTimeout(() => { translateSelectedReadingText().catch(() => {}); }, 150);
 });
-document.addEventListener('click', (e) => {
-  if (!el.readingTranslateTooltip || el.readingTranslateTooltip.hidden) return;
-  if (readingPopoverOpen && Date.now() - readingPopoverOpenedAt < 250) return;
-  if (el.readingTranslateTooltip.contains(e.target)) return;
-  if (el.readingBox?.contains(e.target)) return;
-  const tools = document.getElementById('reading-tools');
-  if (tools?.contains(e.target)) return;
-  hideReadingTranslateTooltip();
-  setReadingTranslateStatus('Đã đóng popover thêm note.');
-});
-el.readingTranslateTooltip?.addEventListener('click', (e) => e.stopPropagation());
 el.readingSaveWord?.addEventListener('click', saveReadingWord);
 
 el.readingSaveSelected?.addEventListener('click', async () => {
