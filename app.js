@@ -1255,7 +1255,32 @@ function resetStateForNewUser(keepSettings = true) {
   state = { settings, days: {}, phase: 'phase1', readingNotebook: [], readingNotes: [] };
   state.days[dateKey] = { plan: null, tasks: [] };
   ensureDailyTasks(state.days[dateKey]);
+  // Reset in-memory DB cache để tránh hiện data của account cũ
+  dbLoadedVocab = [];
+  dbLoadedGrammar = [];
   save();
+}
+
+function clearPracticeTabsUI() {
+  // Xóa toàn bộ nội dung HTML của các tab luyện tập và sổ tay
+  // Được gọi khi logout hoặc đăng nhập account mới không có plan
+  const emptyMsg = '<p class="muted empty-state">Chưa có kế hoạch. Hãy tạo kế hoạch mới để bắt đầu học.</p>';
+  if (el.readingBox)      el.readingBox.innerHTML      = emptyMsg;
+  if (el.listeningBox)    el.listeningBox.innerHTML    = emptyMsg;
+  if (el.speakingBox)     el.speakingBox.innerHTML     = emptyMsg;
+  if (el.writingBox)      el.writingBox.innerHTML      = emptyMsg;
+  if (el.readingQa)       el.readingQa.innerHTML       = '';
+  if (el.readingFeedback) el.readingFeedback.textContent = '';
+  if (el.speakingAnswer)  el.speakingAnswer.value      = '';
+  if (el.writingAnswer)   el.writingAnswer.value       = '';
+  if (el.speakingFeedback) el.speakingFeedback.textContent = '';
+  if (el.writingFeedback)  el.writingFeedback.textContent  = '';
+  if (el.vocabBox)        el.vocabBox.innerHTML        = emptyMsg;
+  if (el.grammarBox)      el.grammarBox.innerHTML      = emptyMsg;
+  if (el.vocabFlashcard)  el.vocabFlashcard.textContent = 'Chưa có từ vựng.';
+  if (el.vocabPractice)   el.vocabPractice.innerHTML   = '';
+  if (el.vocabPracticeResult) el.vocabPracticeResult.textContent = '';
+  if (el.vocabQuizScore)  el.vocabQuizScore.textContent = '';
 }
 
 async function bootstrap() {
@@ -1548,6 +1573,7 @@ el.authLogin?.addEventListener('click', async () => {
   if (error) { el.authStatus.textContent = `Lỗi đăng nhập: ${error.message}`; return; }
   // Clear data của account cũ, chỉ giữ API key/model
   resetStateForNewUser(true);
+  clearPracticeTabsUI(); // xóa HTML cũ của account trước ngay lập tức
   state._userId = authData.user.id;
   cloudOnlyMode = true;
   save();
@@ -1568,6 +1594,12 @@ el.authLogin?.addEventListener('click', async () => {
       renderVocabTools();
       renderGrammarTools();
       setupPracticeSkills();
+    } else {
+      // Account mới không có plan hôm nay → clear lại sau khi load xong
+      clearPracticeTabsUI();
+      renderVocabTools();
+      renderGrammarTools();
+      renderNotebookReviewCard();
     }
     el.authStatus.textContent = 'Đăng nhập thành công ✅ (cloud-only, local chỉ giữ API key/model)';
   } catch (e) {
@@ -1582,6 +1614,7 @@ el.authLogout?.addEventListener('click', async () => {
   resetStateForNewUser(true);
   delete state._userId;
   save();
+  clearPracticeTabsUI();
   renderReadingNotebook();
   renderPlanStatusBadge();
   renderChecklist();
