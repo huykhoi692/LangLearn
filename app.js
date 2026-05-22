@@ -120,6 +120,8 @@ function save() {
   fullState.days = state.days;
   fullState.readingNotebook = state.readingNotebook || [];
   fullState.readingNotes = state.readingNotes || [];
+  if (state._userId) fullState._userId = state._userId;
+  else delete fullState._userId;
   localStorage.setItem(KEY, JSON.stringify(fullState));
 }
 
@@ -184,8 +186,9 @@ async function callGemini(prompt) {
     throw new Error(`API lỗi ${res.status}${detail ? `: ${detail}` : ''}`);
   }
   const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  return JSON.parse(text);
+  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  return JSON.parse(text || '{}');
 }
 
 
@@ -778,20 +781,25 @@ function saveReadingWord() {
 
 function renderStats() {
   const days = Object.keys(state.days);
-  const completed = days.filter(d => state.days[d].tasks.length && state.days[d].tasks.every(t => t.done)).length;
+  const completed = days.filter(d => {
+    const tasks = state.days[d]?.tasks || [];
+    return tasks.length && tasks.every(t => t.done);
+  }).length;
   const today = state.days[dateKey];
-  const pct = today.tasks.length ? Math.round((today.tasks.filter(t => t.done).length / today.tasks.length) * 100) : 0;
+  const todayTasks = today?.tasks || [];
+  const pct = todayTasks.length ? Math.round((todayTasks.filter(t => t.done).length / todayTasks.length) * 100) : 0;
   const weekMs = 7 * 86400000;
   let mins = 0;
   days.forEach(d => {
     if (Date.now() - new Date(d).getTime() > weekMs) return;
-    state.days[d].tasks.filter(t => t.done).forEach(t => mins += Number(t.duration || 0));
+    (state.days[d]?.tasks || []).filter(t => t.done).forEach(t => mins += Number(t.duration || 0));
   });
 
   let streak = 0;
   const sorted = [...days].sort().reverse();
   for (const d of sorted) {
-    const doneAll = state.days[d].tasks.length && state.days[d].tasks.every(t => t.done);
+    const tasks = state.days[d]?.tasks || [];
+    const doneAll = tasks.length && tasks.every(t => t.done);
     if (doneAll) streak += 1;
     else break;
   }
@@ -1240,10 +1248,32 @@ function init() {
   });
 }
 
+function resetStateForNewUser(keepSettings = true) {
+  const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+  const settings = keepSettings ? (saved.settings || state.settings) : { apiKey: '', model: 'gemini-1.5-flash' };
+  localStorage.removeItem(KEY);
+  state = { settings, days: {}, phase: 'phase1', readingNotebook: [], readingNotes: [] };
+  state.days[dateKey] = { plan: null, tasks: [] };
+  ensureDailyTasks(state.days[dateKey]);
+  save();
+}
+
 async function bootstrap() {
   const user = await currentUser();
   cloudOnlyMode = !!user;
-  if (cloudOnlyMode) save();
+
+  // Nếu userId trong localStorage khác với user hiện tại → clear để tránh data leak
+  const cached = JSON.parse(localStorage.getItem(KEY) || '{}');
+  const cachedUserId = cached._userId || null;
+  const currentUserId = user ? user.id : null;
+  if (cachedUserId !== currentUserId) {
+    resetStateForNewUser(true); // giữ apiKey/model, xóa hết data học
+  }
+  if (currentUserId) {
+    state._userId = currentUserId;
+    save();
+  }
+
   init();
   await loadTodayFromSupabase();
   await loadAllReadingNotesFromSupabase().catch(() => {});
@@ -1310,7 +1340,6 @@ async function upsertDayToSupabase(studyDate, dayData) {
   }, { onConflict: 'user_id,study_date' }).select('id').single();
   if (planErr) throw planErr;
 
-  await supa.from('daily_tasks').delete().eq('daily_plan_id', planRow.id);
   const rows = (dayData.tasks || []).map((t, i) => ({
     daily_plan_id: planRow.id,
     user_id: user.id,
@@ -1320,8 +1349,14 @@ async function upsertDayToSupabase(studyDate, dayData) {
     is_done: !!t.done
   }));
   if (rows.length) {
+    // Insert trước, xóa rows cũ sau — tránh mất data nếu network bị ngắt giữa chừng
     const { error: taskErr } = await supa.from('daily_tasks').insert(rows);
     if (taskErr) throw new Error('daily_tasks sync lỗi: ' + taskErr.message);
+    await supa.from('daily_tasks').delete()
+      .eq('daily_plan_id', planRow.id)
+      .not('task_key', 'in', `(${rows.map(r => `"${r.task_key}"`).join(',')})`);
+  } else {
+    await supa.from('daily_tasks').delete().eq('daily_plan_id', planRow.id);
   }
 
   const vocabRows = (dayData.plan?.vocabulary || []).map(v => ({
@@ -1338,14 +1373,23 @@ async function upsertDayToSupabase(studyDate, dayData) {
     if (vocabErr) throw new Error('vocab_items sync lỗi: ' + vocabErr.message);
   }
 
-  const grammarRows = (dayData.plan?.grammar || []).map(g => ({
-    user_id: user.id,
-    study_date: studyDate,
-    point: String(g.point || '').trim(),
-    theory: String(g.theory || '').trim(),
-    exercise: String(g.exercise || '').trim(),
-    answer: String(g.answer || '').trim()
-  })).filter(g => g.point && g.exercise && g.answer);
+  const grammarRows = [];
+  (dayData.plan?.grammar || []).forEach(g => {
+    const point  = String(g.point  || '').trim();
+    const theory = String(g.theory || '').trim();
+    if (!point) return;
+    // Hỗ trợ cả hai format: nested exercises[] và top-level exercise/answer
+    const exList = Array.isArray(g.exercises) && g.exercises.length
+      ? g.exercises
+      : (g.exercise ? [{ exercise: g.exercise, answer: g.answer }] : []);
+    exList.forEach(ex => {
+      const exercise = String(ex?.exercise || ex?.question || '').trim();
+      const answer   = String(ex?.answer   || '').trim();
+      if (exercise && answer) {
+        grammarRows.push({ user_id: user.id, study_date: studyDate, point, theory, exercise, answer });
+      }
+    });
+  });
   if (grammarRows.length) {
     const { error: grammarErr } = await supa.from('grammar_items').upsert(grammarRows, { onConflict: 'user_id,study_date,point,exercise' });
     if (grammarErr) throw new Error('grammar_items sync lỗi: ' + grammarErr.message);
@@ -1371,7 +1415,13 @@ async function loadTodayFromSupabase() {
 
   const { data: planRow, error } = await supa.from('daily_plans').select('id,plan_json').eq('user_id', user.id).eq('study_date', dateKey).maybeSingle();
   if (error || !planRow) {
-    clearCurrentDayState();
+    // Nếu local đang có plan (học offline) thì upsert lên cloud trước, không xóa
+    const localDay = state.days[dateKey];
+    if (localDay?.plan) {
+      await upsertDayToSupabase(dateKey, localDay).catch(() => {});
+    } else {
+      clearCurrentDayState();
+    }
     return false;
   }
   const { data: tasks } = await supa.from('daily_tasks').select('label,duration_min,is_done').eq('daily_plan_id', planRow.id).order('created_at');
@@ -1494,8 +1544,11 @@ async function backfillAllVocabGrammarFromDailyPlans() {
 
 el.authLogin?.addEventListener('click', async () => {
   el.authStatus.textContent = 'Đang đăng nhập...';
-  const { error } = await supa.auth.signInWithPassword({ email: el.authEmail.value.trim(), password: el.authPassword.value });
+  const { data: authData, error } = await supa.auth.signInWithPassword({ email: el.authEmail.value.trim(), password: el.authPassword.value });
   if (error) { el.authStatus.textContent = `Lỗi đăng nhập: ${error.message}`; return; }
+  // Clear data của account cũ, chỉ giữ API key/model
+  resetStateForNewUser(true);
+  state._userId = authData.user.id;
   cloudOnlyMode = true;
   save();
   el.authStatus.textContent = 'Đăng nhập thành công ✅ cloud-only mode đang bật...';
@@ -1525,8 +1578,9 @@ el.authLogin?.addEventListener('click', async () => {
 el.authLogout?.addEventListener('click', async () => {
   await supa.auth.signOut();
   cloudOnlyMode = false;
-  clearCurrentDayState();
-  state.readingNotes = [];
+  // Xóa hoàn toàn data, không để lộ data của account vừa logout
+  resetStateForNewUser(true);
+  delete state._userId;
   save();
   renderReadingNotebook();
   renderPlanStatusBadge();

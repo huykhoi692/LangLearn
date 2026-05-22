@@ -1,92 +1,72 @@
-create table if not exists public.daily_plans (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  study_date date not null,
-  model_name text not null default 'gemini-1.5-flash',
-  plan_json jsonb not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique(user_id, study_date)
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.daily_plans (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  study_date date NOT NULL,
+  model_name text NOT NULL DEFAULT 'gemini-1.5-flash'::text,
+  difficulty_level smallint NOT NULL DEFAULT 1 CHECK (difficulty_level >= 1 AND difficulty_level <= 10),
+  plan_json jsonb NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT daily_plans_pkey PRIMARY KEY (id),
+  CONSTRAINT daily_plans_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
-create table if not exists public.daily_tasks (
-  id uuid primary key default gen_random_uuid(),
-  daily_plan_id uuid not null references public.daily_plans(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
-  task_key text not null,
-  label text not null,
-  duration_min smallint not null default 15,
-  is_done boolean not null default false,
-  done_at timestamptz,
-  created_at timestamptz not null default now()
+CREATE TABLE public.daily_tasks (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  daily_plan_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  task_key text NOT NULL,
+  label text NOT NULL,
+  duration_min smallint NOT NULL DEFAULT 15,
+  is_done boolean NOT NULL DEFAULT false,
+  done_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT daily_tasks_pkey PRIMARY KEY (id),
+  CONSTRAINT daily_tasks_daily_plan_id_fkey FOREIGN KEY (daily_plan_id) REFERENCES public.daily_plans(id),
+  CONSTRAINT daily_tasks_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
-alter table public.daily_plans enable row level security;
-alter table public.daily_tasks enable row level security;
-
-drop policy if exists plans_select_own on public.daily_plans;
-create policy plans_select_own on public.daily_plans for select using (auth.uid() = user_id);
-drop policy if exists plans_insert_own on public.daily_plans;
-create policy plans_insert_own on public.daily_plans for insert with check (auth.uid() = user_id);
-drop policy if exists plans_update_own on public.daily_plans;
-create policy plans_update_own on public.daily_plans for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-drop policy if exists plans_delete_own on public.daily_plans;
-create policy plans_delete_own on public.daily_plans for delete using (auth.uid() = user_id);
-
-drop policy if exists tasks_select_own on public.daily_tasks;
-create policy tasks_select_own on public.daily_tasks for select using (auth.uid() = user_id);
-drop policy if exists tasks_insert_own on public.daily_tasks;
-create policy tasks_insert_own on public.daily_tasks for insert with check (auth.uid() = user_id);
-drop policy if exists tasks_update_own on public.daily_tasks;
-create policy tasks_update_own on public.daily_tasks for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-drop policy if exists tasks_delete_own on public.daily_tasks;
-create policy tasks_delete_own on public.daily_tasks for delete using (auth.uid() = user_id);
-
-create table if not exists public.vocab_items (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  study_date date not null,
-  word text not null,
-  meaning text not null,
+CREATE TABLE public.grammar_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  study_date date NOT NULL,
+  point text NOT NULL,
+  exercise text NOT NULL,
+  answer text NOT NULL,
+  correct_count integer NOT NULL DEFAULT 0,
+  wrong_count integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  theory text,
+  CONSTRAINT grammar_items_pkey PRIMARY KEY (id),
+  CONSTRAINT grammar_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.skill_attempts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  study_date date NOT NULL,
+  skill text NOT NULL CHECK (skill = ANY (ARRAY['speaking'::text, 'writing'::text, 'reading'::text, 'listening'::text])),
+  prompt_text text NOT NULL,
+  user_answer text NOT NULL,
+  score numeric,
+  feedback_short text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT skill_attempts_pkey PRIMARY KEY (id),
+  CONSTRAINT skill_attempts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.vocab_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  study_date date NOT NULL,
+  word text NOT NULL,
+  meaning text NOT NULL,
   example text,
   topic text,
-  is_mastered boolean not null default false,
-  created_at timestamptz not null default now(),
-  unique(user_id, study_date, word)
+  correct_count integer NOT NULL DEFAULT 0,
+  wrong_count integer NOT NULL DEFAULT 0,
+  next_review_at date,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  is_mastered boolean NOT NULL DEFAULT false,
+  CONSTRAINT vocab_items_pkey PRIMARY KEY (id),
+  CONSTRAINT vocab_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
-
-create table if not exists public.grammar_items (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  study_date date not null,
-  point text not null,
-  theory text,
-  exercise text not null,
-  answer text not null,
-  created_at timestamptz not null default now(),
-  unique(user_id, study_date, point, exercise)
-);
-
-alter table public.vocab_items enable row level security;
-alter table public.grammar_items enable row level security;
-
-drop policy if exists vocab_select_own on public.vocab_items;
-create policy vocab_select_own on public.vocab_items for select using (auth.uid() = user_id);
-drop policy if exists vocab_insert_own on public.vocab_items;
-create policy vocab_insert_own on public.vocab_items for insert with check (auth.uid() = user_id);
-drop policy if exists vocab_update_own on public.vocab_items;
-create policy vocab_update_own on public.vocab_items for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-drop policy if exists vocab_delete_own on public.vocab_items;
-create policy vocab_delete_own on public.vocab_items for delete using (auth.uid() = user_id);
-
-drop policy if exists grammar_select_own on public.grammar_items;
-create policy grammar_select_own on public.grammar_items for select using (auth.uid() = user_id);
-drop policy if exists grammar_insert_own on public.grammar_items;
-create policy grammar_insert_own on public.grammar_items for insert with check (auth.uid() = user_id);
-drop policy if exists grammar_update_own on public.grammar_items;
-create policy grammar_update_own on public.grammar_items for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-drop policy if exists grammar_delete_own on public.grammar_items;
-create policy grammar_delete_own on public.grammar_items for delete using (auth.uid() = user_id);
-
-
-alter table public.grammar_items add column if not exists theory text;
