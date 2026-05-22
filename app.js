@@ -230,18 +230,21 @@ KHÔNG lặp lại từ/chủ điểm sau (14 ngày gần đây):
 Schema:
 {
  "reading":{"title":"","passage":"","questions":["","",""],"answers":["","",""],"duration":25},
- "listening":{"title":"","youtubeUrl":"","youtubeQuery":"","task":"","duration":20},
+ "listening":{"title":"","youtubeUrl":"","youtubeQuery":"","task":"","resource":"","duration":20},
  "speaking":{"question":"","hints":["",""],"duration":20},
  "writing":{"question":"","hints":["",""],"duration":30},
  "vocabulary":[{"word":"","meaning":"","example":""}],
- "grammar":[{"point":"","theory":"","exercise":"","answer":""}],
+ "grammar":[{"point":"","theory":"","exercises":[{"exercise":"","answer":""}]}],
  "checklist":[{"label":"","duration":15}]
+Dữ liệu ngữ pháp phải đi theo trình tự trong file langlearn_english_grammar_dataset_v1.json, không lặp lại các điểm đã dùng gần đây.
+Listening: chỉ chọn ngẫu nhiên 1 resource trong danh sách: BBC Learning English, IELTS Listening British Council, TED Talks, TOEIC Listening ETS; field listening.resource phải ghi rõ nguồn được chọn và task phải cụ thể theo nguồn đó.
 }
 Yêu cầu:
 - vocabulary đúng 12 từ
-- grammar đúng 8 bài
-- mỗi grammar item bắt buộc có theory (1-2 câu ngắn giải thích quy tắc bằng tiếng Việt, KHÔNG lặp lại point)
-- reading passage 120-180 words
+- grammar gồm đúng 3-5 cấu trúc liên quan cùng chủ đề, nâng dần theo ngày
+- mỗi grammar item có theory chi tiết bằng tiếng Việt (ít nhất 4-6 câu ngắn, gồm cách dùng + lỗi thường gặp + so sánh gần nghĩa)
+- mỗi grammar item có đúng 5 bài tập trong mảng exercises (mỗi bài có exercise và answer)
+- reading passage 140-220 words, tăng dần độ khó theo ngày và bám phong cách nguồn: The Guardian/BBC News, Cambridge IELTS 8-18, TOEIC ETS, ReadTheory
 - checklist gồm đủ 6 mục ứng với các phần trên.`;
   return callGemini(prompt);
 }
@@ -872,10 +875,35 @@ function getTodayVocab() {
   return (state.days[dateKey]?.plan?.vocabulary || []).filter(v => v.word && v.meaning);
 }
 function getTodayGrammar() {
-  const fromDb = dbLoadedGrammar.filter(g => g.point && g.exercise && g.answer);
+  const fromDb = normalizeGrammarEntries(dbLoadedGrammar);
   if (fromDb.length) return fromDb;
-  return (state.days[dateKey]?.plan?.grammar || []).filter(g => g.point && g.exercise && g.answer);
+  return normalizeGrammarEntries(state.days[dateKey]?.plan?.grammar || []);
 }
+
+function normalizeGrammarEntries(grammar = []) {
+  const normalized = [];
+  (grammar || []).forEach((item) => {
+    const point = String(item?.point || '').trim();
+    const theory = String(item?.theory || '').trim();
+    const baseExercise = String(item?.exercise || '').trim();
+    const baseAnswer = String(item?.answer || '').trim();
+
+    const nested = Array.isArray(item?.exercises) ? item.exercises : [];
+    if (nested.length) {
+      nested.forEach((ex, idx) => {
+        const exercise = String(ex?.exercise || ex?.question || '').trim();
+        const answer = String(ex?.answer || '').trim();
+        if (point && exercise && answer) normalized.push({ point, theory, exercise, answer, drillIndex: idx + 1 });
+      });
+    }
+
+    if (point && baseExercise && baseAnswer) {
+      normalized.push({ point, theory, exercise: baseExercise, answer: baseAnswer, drillIndex: 1 });
+    }
+  });
+  return normalized;
+}
+
 
 function startVocabQuizRound() {
   const vocab = getTodayVocab();
