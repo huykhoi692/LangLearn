@@ -103,6 +103,7 @@ let readingDraftNote = null;
 let globalEventsBound = false;
 let questCelebratedDate = null;
 let lastReadingSelectionText = "";
+let grammarDatasetCache = null;
 let readingPopoverOpen = false;
 let readingSelectionTimer = null;
 
@@ -216,10 +217,40 @@ function getRecentHistorySummary(limitDays = 14) {
   };
 }
 
+async function loadGrammarDataset() {
+  if (grammarDatasetCache) return grammarDatasetCache;
+  const res = await fetch('./langlearn_english_grammar_dataset_v1.json');
+  if (!res.ok) throw new Error('Không đọc được file grammar dataset nội bộ.');
+  grammarDatasetCache = await res.json();
+  return grammarDatasetCache;
+}
+
+async function getGrammarTrackForToday() {
+  const dataset = await loadGrammarDataset();
+  const lessons = (dataset?.lessons || []).slice().sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+  if (!lessons.length) return { track: [] };
+  const plannedDays = Object.keys(state.days || {}).filter((d) => state.days[d]?.plan).sort();
+  const todayHasPlan = !!state.days[dateKey]?.plan;
+  const dayIndex = Math.max(0, plannedDays.length - (todayHasPlan ? 1 : 0));
+  const bundleSize = 4;
+  const start = Math.min(dayIndex * bundleSize, Math.max(lessons.length - bundleSize, 0));
+  return {
+    track: lessons.slice(start, start + bundleSize).map((l) => ({
+      id: l.id,
+      order: l.order,
+      moduleId: l.moduleId,
+      moduleNameVi: l.moduleNameVi || '',
+      titleVi: l.titleVi || '',
+      grammar: l.grammar || ''
+    }))
+  };
+}
+
 async function generateDailyPlan() {
   const level = getDifficultyLevel();
   const history = getRecentHistorySummary(14);
   const phase = PHASE_CONFIG[state.phase] || PHASE_CONFIG.phase1;
+  const grammarTrackData = await getGrammarTrackForToday();
   const prompt = `Tạo JSON thuần cho kế hoạch học tiếng Anh trong 1 ngày cho người Việt mục tiêu IELTS 6.5 + TOEIC 750.
 Giai đoạn hiện tại: ${phase.label}. Định hướng: ${phase.focus}. Độ khó mục tiêu: ${phase.levelBias}.
 Độ khó hiện tại: ${level}/7 (1 dễ -> 7 khó).
@@ -227,21 +258,25 @@ Tăng độ khó theo level: level thấp dùng câu ngắn + từ B1; level cao
 KHÔNG lặp lại từ/chủ điểm sau (14 ngày gần đây):
 - Từ vựng đã dùng: ${history.recentWords.join(', ') || 'none'}
 - Grammar points đã dùng: ${history.recentGrammarPoints.join(', ') || 'none'}
+- Lộ trình grammar bắt buộc hôm nay (đúng thứ tự, đúng đề mục): ${JSON.stringify(grammarTrackData.track)}
 Schema:
 {
  "reading":{"title":"","passage":"","questions":["","",""],"answers":["","",""],"duration":25},
- "listening":{"title":"","youtubeUrl":"","youtubeQuery":"","task":"","duration":20},
+ "listening":{"title":"","youtubeUrl":"","youtubeQuery":"","task":"","resource":"","duration":20},
  "speaking":{"question":"","hints":["",""],"duration":20},
  "writing":{"question":"","hints":["",""],"duration":30},
  "vocabulary":[{"word":"","meaning":"","example":""}],
- "grammar":[{"point":"","theory":"","exercise":"","answer":""}],
+ "grammar":[{"point":"","theory":"","exercises":[{"exercise":"","answer":""}]}],
  "checklist":[{"label":"","duration":15}]
+Dữ liệu ngữ pháp phải đi theo trình tự trong file langlearn_english_grammar_dataset_v1.json, không lặp lại các điểm đã dùng gần đây.
+Listening: chỉ chọn ngẫu nhiên 1 resource trong danh sách: BBC Learning English, IELTS Listening British Council, TED Talks, TOEIC Listening ETS; field listening.resource phải ghi rõ nguồn được chọn và task phải cụ thể theo nguồn đó.
 }
 Yêu cầu:
 - vocabulary đúng 12 từ
-- grammar đúng 8 bài
-- mỗi grammar item bắt buộc có theory (1-2 câu ngắn giải thích quy tắc bằng tiếng Việt, KHÔNG lặp lại point)
-- reading passage 120-180 words
+- grammar gồm đúng 3-5 cấu trúc liên quan cùng chủ đề, nâng dần theo ngày
+- mỗi grammar item có theory chi tiết bằng tiếng Việt (ít nhất 4-6 câu ngắn, gồm cách dùng + lỗi thường gặp + so sánh gần nghĩa)
+- mỗi grammar item có đúng 5 bài tập trong mảng exercises (mỗi bài có exercise và answer)
+- reading passage 140-220 words, tăng dần độ khó theo ngày và bám phong cách nguồn: The Guardian/BBC News, Cambridge IELTS 8-18, TOEIC ETS, ReadTheory
 - checklist gồm đủ 6 mục ứng với các phần trên.`;
   return callGemini(prompt);
 }
@@ -331,13 +366,13 @@ function ensureDailyTasks(day) {
 function iconForTask(label='') { const l=label.toLowerCase(); if(l.includes('read')) return '📖'; if(l.includes('listen')) return '🎧'; if(l.includes('speak')) return '🗣️'; if(l.includes('writ')) return '✍️'; if(l.includes('vocab')||l.includes('từ')) return '🧠'; if(l.includes('grammar')||l.includes('ngữ')) return '🧩'; return '✅'; }
 function getTaskDestination(label = '') {
   const l = String(label).toLowerCase();
-  if (l.includes('read')) return { tab: 'practice', skill: 'reading' };
-  if (l.includes('listen')) return { tab: 'practice', skill: 'listening' };
-  if (l.includes('speak')) return { tab: 'practice', skill: 'speaking' };
-  if (l.includes('writ')) return { tab: 'practice', skill: 'writing' };
+  if (l.includes('read') || l.includes('đọc')) return { tab: 'practice', skill: 'reading' };
+  if (l.includes('listen') || l.includes('nghe')) return { tab: 'practice', skill: 'listening' };
+  if (l.includes('speak') || l.includes('nói')) return { tab: 'practice', skill: 'speaking' };
+  if (l.includes('writ') || l.includes('viết')) return { tab: 'practice', skill: 'writing' };
   if (l.includes('vocab') || l.includes('từ')) return { tab: 'notebook', skill: null };
   if (l.includes('grammar') || l.includes('ngữ')) return { tab: 'notebook', skill: null };
-  return { tab: 'today', skill: null };
+  return { tab: 'practice', skill: 'reading' };
 }
 function getFirstPendingTask() { return (state.days[dateKey]?.tasks || []).find(t => !t.done) || null; }
 function markTaskCompletedBySkill(skill) {
@@ -617,6 +652,7 @@ function hideReadingTranslateTooltip() {
   el.readingTranslateTooltip.hidden = true;
   el.readingTranslateTooltip.innerHTML = '';
   readingDraftNote = null;
+  readingPopoverOpen = false;
 }
 
 function createReadingNote(word, meaning, example, source = 'manual') {
@@ -872,10 +908,35 @@ function getTodayVocab() {
   return (state.days[dateKey]?.plan?.vocabulary || []).filter(v => v.word && v.meaning);
 }
 function getTodayGrammar() {
-  const fromDb = dbLoadedGrammar.filter(g => g.point && g.exercise && g.answer);
+  const fromDb = normalizeGrammarEntries(dbLoadedGrammar);
   if (fromDb.length) return fromDb;
-  return (state.days[dateKey]?.plan?.grammar || []).filter(g => g.point && g.exercise && g.answer);
+  return normalizeGrammarEntries(state.days[dateKey]?.plan?.grammar || []);
 }
+
+function normalizeGrammarEntries(grammar = []) {
+  const normalized = [];
+  (grammar || []).forEach((item) => {
+    const point = String(item?.point || '').trim();
+    const theory = String(item?.theory || '').trim();
+    const baseExercise = String(item?.exercise || '').trim();
+    const baseAnswer = String(item?.answer || '').trim();
+
+    const nested = Array.isArray(item?.exercises) ? item.exercises : [];
+    if (nested.length) {
+      nested.forEach((ex, idx) => {
+        const exercise = String(ex?.exercise || ex?.question || '').trim();
+        const answer = String(ex?.answer || '').trim();
+        if (point && exercise && answer) normalized.push({ point, theory, exercise, answer, drillIndex: idx + 1 });
+      });
+    }
+
+    if (point && baseExercise && baseAnswer) {
+      normalized.push({ point, theory, exercise: baseExercise, answer: baseAnswer, drillIndex: 1 });
+    }
+  });
+  return normalized;
+}
+
 
 function startVocabQuizRound() {
   const vocab = getTodayVocab();
@@ -1128,9 +1189,6 @@ function setupGlobalEvents() {
         targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         if (typeof targetEl.focus === 'function') targetEl.focus();
         targetEl.classList.remove('highlight-target');
-        void targetEl.offsetWidth;
-        targetEl.classList.add('highlight-target');
-        setTimeout(() => targetEl.classList.remove('highlight-target'), 1000);
       }
       showToast('Đã mở khu ôn tập');
     }
@@ -1463,10 +1521,12 @@ el.readingBox?.addEventListener('mouseup', () => {
   if (readingSelectionTimer) clearTimeout(readingSelectionTimer);
   readingSelectionTimer = setTimeout(() => { translateSelectedReadingText().catch(() => {}); }, 150);
 });
-document.addEventListener('mousedown', (e) => {
+document.addEventListener('click', (e) => {
   if (!el.readingTranslateTooltip || el.readingTranslateTooltip.hidden) return;
   if (el.readingTranslateTooltip.contains(e.target)) return;
   if (el.readingBox?.contains(e.target)) return;
+  const tools = document.getElementById('reading-tools');
+  if (tools?.contains(e.target)) return;
   hideReadingTranslateTooltip();
   setReadingTranslateStatus('Đã đóng popover thêm note.');
 });
@@ -1491,4 +1551,3 @@ el.readingUncheckAll?.addEventListener('click', () => {
 
 
 el.checkReading?.addEventListener('click', checkReadingAnswers);
-
