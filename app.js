@@ -106,6 +106,7 @@ let lastReadingSelectionText = "";
 let grammarDatasetCache = null;
 let readingPopoverOpen = false;
 let readingSelectionTimer = null;
+let readingPopoverOpenedAt = 0;
 
 function save() {
   const fullState = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -696,6 +697,7 @@ function saveReadingDraftNote() {
 
 function showReadingNotePopover(word, x, y) {
   readingPopoverOpen = true;
+  readingPopoverOpenedAt = Date.now();
   readingDraftNote = { word };
   showReadingTranslateTooltip(`
     <div><strong>Thêm note</strong></div>
@@ -1523,6 +1525,7 @@ el.readingBox?.addEventListener('mouseup', () => {
 });
 document.addEventListener('click', (e) => {
   if (!el.readingTranslateTooltip || el.readingTranslateTooltip.hidden) return;
+  if (readingPopoverOpen && Date.now() - readingPopoverOpenedAt < 250) return;
   if (el.readingTranslateTooltip.contains(e.target)) return;
   if (el.readingBox?.contains(e.target)) return;
   const tools = document.getElementById('reading-tools');
@@ -1530,6 +1533,7 @@ document.addEventListener('click', (e) => {
   hideReadingTranslateTooltip();
   setReadingTranslateStatus('Đã đóng popover thêm note.');
 });
+el.readingTranslateTooltip?.addEventListener('click', (e) => e.stopPropagation());
 el.readingSaveWord?.addEventListener('click', saveReadingWord);
 
 el.readingSaveSelected?.addEventListener('click', async () => {
