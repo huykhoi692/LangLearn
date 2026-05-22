@@ -106,6 +106,7 @@ let lastReadingSelectionText = "";
 let grammarDatasetCache = null;
 let readingPopoverOpen = false;
 let readingSelectionTimer = null;
+let readingPopoverOpenedAt = 0;
 
 function save() {
   const fullState = JSON.parse(localStorage.getItem(KEY) || '{}');
@@ -696,6 +697,7 @@ function saveReadingDraftNote() {
 
 function showReadingNotePopover(word, x, y) {
   readingPopoverOpen = true;
+  readingPopoverOpenedAt = Date.now();
   readingDraftNote = { word };
   showReadingTranslateTooltip(`
     <div class="row" style="justify-content:space-between;align-items:center;"><strong>Thêm note</strong><button id="reading-note-cancel" class="ghost" type="button" aria-label="Đóng">✕</button></div>
