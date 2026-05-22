@@ -103,6 +103,7 @@ let readingDraftNote = null;
 let globalEventsBound = false;
 let questCelebratedDate = null;
 let lastReadingSelectionText = "";
+let grammarDatasetCache = null;
 let readingPopoverOpen = false;
 let readingSelectionTimer = null;
 
@@ -216,10 +217,40 @@ function getRecentHistorySummary(limitDays = 14) {
   };
 }
 
+async function loadGrammarDataset() {
+  if (grammarDatasetCache) return grammarDatasetCache;
+  const res = await fetch('./langlearn_english_grammar_dataset_v1.json');
+  if (!res.ok) throw new Error('Không đọc được file grammar dataset nội bộ.');
+  grammarDatasetCache = await res.json();
+  return grammarDatasetCache;
+}
+
+async function getGrammarTrackForToday() {
+  const dataset = await loadGrammarDataset();
+  const lessons = (dataset?.lessons || []).slice().sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+  if (!lessons.length) return { track: [] };
+  const plannedDays = Object.keys(state.days || {}).filter((d) => state.days[d]?.plan).sort();
+  const todayHasPlan = !!state.days[dateKey]?.plan;
+  const dayIndex = Math.max(0, plannedDays.length - (todayHasPlan ? 1 : 0));
+  const bundleSize = 4;
+  const start = Math.min(dayIndex * bundleSize, Math.max(lessons.length - bundleSize, 0));
+  return {
+    track: lessons.slice(start, start + bundleSize).map((l) => ({
+      id: l.id,
+      order: l.order,
+      moduleId: l.moduleId,
+      moduleNameVi: l.moduleNameVi || '',
+      titleVi: l.titleVi || '',
+      grammar: l.grammar || ''
+    }))
+  };
+}
+
 async function generateDailyPlan() {
   const level = getDifficultyLevel();
   const history = getRecentHistorySummary(14);
   const phase = PHASE_CONFIG[state.phase] || PHASE_CONFIG.phase1;
+  const grammarTrackData = await getGrammarTrackForToday();
   const prompt = `Tạo JSON thuần cho kế hoạch học tiếng Anh trong 1 ngày cho người Việt mục tiêu IELTS 6.5 + TOEIC 750.
 Giai đoạn hiện tại: ${phase.label}. Định hướng: ${phase.focus}. Độ khó mục tiêu: ${phase.levelBias}.
 Độ khó hiện tại: ${level}/7 (1 dễ -> 7 khó).
@@ -227,6 +258,7 @@ Tăng độ khó theo level: level thấp dùng câu ngắn + từ B1; level cao
 KHÔNG lặp lại từ/chủ điểm sau (14 ngày gần đây):
 - Từ vựng đã dùng: ${history.recentWords.join(', ') || 'none'}
 - Grammar points đã dùng: ${history.recentGrammarPoints.join(', ') || 'none'}
+- Lộ trình grammar bắt buộc hôm nay (đúng thứ tự, đúng đề mục): ${JSON.stringify(grammarTrackData.track)}
 Schema:
 {
  "reading":{"title":"","passage":"","questions":["","",""],"answers":["","",""],"duration":25},
@@ -334,13 +366,13 @@ function ensureDailyTasks(day) {
 function iconForTask(label='') { const l=label.toLowerCase(); if(l.includes('read')) return '📖'; if(l.includes('listen')) return '🎧'; if(l.includes('speak')) return '🗣️'; if(l.includes('writ')) return '✍️'; if(l.includes('vocab')||l.includes('từ')) return '🧠'; if(l.includes('grammar')||l.includes('ngữ')) return '🧩'; return '✅'; }
 function getTaskDestination(label = '') {
   const l = String(label).toLowerCase();
-  if (l.includes('read')) return { tab: 'practice', skill: 'reading' };
-  if (l.includes('listen')) return { tab: 'practice', skill: 'listening' };
-  if (l.includes('speak')) return { tab: 'practice', skill: 'speaking' };
-  if (l.includes('writ')) return { tab: 'practice', skill: 'writing' };
+  if (l.includes('read') || l.includes('đọc')) return { tab: 'practice', skill: 'reading' };
+  if (l.includes('listen') || l.includes('nghe')) return { tab: 'practice', skill: 'listening' };
+  if (l.includes('speak') || l.includes('nói')) return { tab: 'practice', skill: 'speaking' };
+  if (l.includes('writ') || l.includes('viết')) return { tab: 'practice', skill: 'writing' };
   if (l.includes('vocab') || l.includes('từ')) return { tab: 'notebook', skill: null };
   if (l.includes('grammar') || l.includes('ngữ')) return { tab: 'notebook', skill: null };
-  return { tab: 'today', skill: null };
+  return { tab: 'practice', skill: 'reading' };
 }
 function getFirstPendingTask() { return (state.days[dateKey]?.tasks || []).find(t => !t.done) || null; }
 function markTaskCompletedBySkill(skill) {
@@ -620,6 +652,7 @@ function hideReadingTranslateTooltip() {
   el.readingTranslateTooltip.hidden = true;
   el.readingTranslateTooltip.innerHTML = '';
   readingDraftNote = null;
+  readingPopoverOpen = false;
 }
 
 function createReadingNote(word, meaning, example, source = 'manual') {
@@ -1156,9 +1189,6 @@ function setupGlobalEvents() {
         targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         if (typeof targetEl.focus === 'function') targetEl.focus();
         targetEl.classList.remove('highlight-target');
-        void targetEl.offsetWidth;
-        targetEl.classList.add('highlight-target');
-        setTimeout(() => targetEl.classList.remove('highlight-target'), 1000);
       }
       showToast('Đã mở khu ôn tập');
     }
@@ -1491,10 +1521,12 @@ el.readingBox?.addEventListener('mouseup', () => {
   if (readingSelectionTimer) clearTimeout(readingSelectionTimer);
   readingSelectionTimer = setTimeout(() => { translateSelectedReadingText().catch(() => {}); }, 150);
 });
-document.addEventListener('mousedown', (e) => {
+document.addEventListener('click', (e) => {
   if (!el.readingTranslateTooltip || el.readingTranslateTooltip.hidden) return;
   if (el.readingTranslateTooltip.contains(e.target)) return;
   if (el.readingBox?.contains(e.target)) return;
+  const tools = document.getElementById('reading-tools');
+  if (tools?.contains(e.target)) return;
   hideReadingTranslateTooltip();
   setReadingTranslateStatus('Đã đóng popover thêm note.');
 });
@@ -1519,4 +1551,3 @@ el.readingUncheckAll?.addEventListener('click', () => {
 
 
 el.checkReading?.addEventListener('click', checkReadingAnswers);
-
